@@ -1,5 +1,4 @@
-const MM_API_BASE = window.MM_API_BASE || "http://localhost:8000";
-
+const MM_API_BASE = window.MM_API_BASE || "https://sih-manakmitra.onrender.com";
 let STANDARDS = [];
 let SERVICES = [];
 let FAQS = [];
