@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>History — ManakMitra</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<header id="site-topnav" class="topnav"></header>
+
+<div class="app-shell">
+  <aside id="site-sidebar" class="sidebar"></aside>
+
+  <main class="main history-page">
+    <div class="page-head">
+      <div class="crumbtrail"><a href="index.html">Home</a> / <span>History</span></div>
+      <h1>Query History</h1>
+      <p class="muted">Everything you've asked ManakMitra, in one place.</p>
+    </div>
+
+    <div class="card" data-tilt style="padding:22px;">
+      <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:14px;">
+        <div></div>
+        <button id="clear-history-btn" type="button" class="btn btn-ghost" style="white-space:nowrap;">Clear history</button>
+      </div>
+      <div id="history-list"></div>
+    </div>
+  </main>
+</div>
+
+<script src="js/local-data.js"></script>
+<script src="js/nav.js"></script>
+<script src="js/config.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="js/textfx.js"></script>
+<script src="js/auth.js"></script>
+<script src="js/assistant.js"></script>
+<script src="js/app.js"></script>
+<script>
+  // History clearing is intentionally local-only. Database records remain untouched.
+  function historyVisibilityKey(){
+    const user = window.MM_AUTH?.getCurrentUser?.();
+    return user?.id ? `mm-hidden-history-before:${user.id}` : null;
+  }
+
+  function historyIsVisible(message){
+    const key = historyVisibilityKey();
+    if(!key) return true;
+    const cutoff = localStorage.getItem(key);
+    if(!cutoff) return true;
+    const created = new Date(message.created_at || 0).getTime();
+    const hiddenBefore = new Date(cutoff).getTime();
+    return !Number.isFinite(created) || !Number.isFinite(hiddenBefore) || created > hiddenBefore;
+  }
+
+  function timeAgo(iso){
+    const diffMs = Date.now() - new Date(iso).getTime();
+    const mins = Math.round(diffMs / 60000);
+    if(mins < 1) return "just now";
+    if(mins < 60) return `${mins} min${mins===1?"":"s"} ago`;
+    const hrs = Math.round(mins / 60);
+    if(hrs < 24) return `${hrs} hour${hrs===1?"":"s"} ago`;
+    const days = Math.round(hrs / 24);
+    return `${days} day${days===1?"":"s"} ago`;
+  }
+
+  async function renderHistory(){
+    const listEl = document.getElementById("history-list");
+    if(!window.MM_AUTH) return;
+    await MM_AUTH.ready;
+    if(!MM_AUTH.isLoggedIn()){
+      listEl.innerHTML = `<p class="muted" style="padding:8px;">Log in to see your real question history here.</p>`;
+      return;
+    }
+
+    const history = (await MM_AUTH.getChatHistory()).filter(historyIsVisible);
+    const userTurns = history.filter(m => m.role === "user").reverse();
+    if(userTurns.length){
+      listEl.innerHTML = userTurns.map(m => `
+        <a href="assistant.html?q=${encodeURIComponent(m.content)}" class="row-card" style="padding:13px 8px;">
+          <div class="row-left"><span class="row-dot"></span><span class="row-title">${escapeHtml(m.content)}</span></div>
+          <span class="row-time">${timeAgo(m.created_at)}</span>
+        </a>
+      `).join("");
+    } else {
+      listEl.innerHTML = `<p class="muted" style="padding:8px;">No questions yet — anything you ask ManakMitra while logged in will show up here.</p>`;
+    }
+  }
+
+  document.addEventListener("DOMContentLoaded", async () => {
+    renderSidebar("history.html");
+
+    document.getElementById("clear-history-btn")?.addEventListener("click", async () => {
+      if(!MM_AUTH.isLoggedIn()) return;
+      if(!confirm("Clear your query history from this device? Your saved history will remain in the database.")) return;
+      const key = historyVisibilityKey();
+      if(key) localStorage.setItem(key, new Date().toISOString());
+      await renderHistory();
+    });
+
+    await renderHistory();
+    // Keep an already-open History tab fresh as soon as another query is saved.
+    window.addEventListener("focus", renderHistory);
+    setInterval(renderHistory, 2500);
+  });
+</script>
+</body>
+</html>

@@ -1,0 +1,218 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Account Settings — ManakMitra</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<header id="site-topnav" class="topnav"></header>
+
+<div class="app-shell">
+  <aside id="site-sidebar" class="sidebar"></aside>
+
+  <main class="main">
+    <div class="page-head">
+      <div class="crumbtrail"><a href="index.html">Home</a> / <span>Settings</span></div>
+      <h1>Account Settings</h1>
+      <p class="muted">Manage your name, email and password.</p>
+    </div>
+
+    <!-- shown when logged out -->
+    <div class="card" data-tilt style="padding:36px; text-align:center; max-width:480px;" id="settings-logged-out" hidden>
+      <div style="width:52px;height:52px;border-radius:50%;background:var(--grad-soft);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;margin:0 auto 16px;">
+        <svg viewBox="0 0 24 24" class="icon" style="width:24px;height:24px;color:var(--cyan);"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 3.6-6 8-6s8 2 8 6"/></svg>
+      </div>
+      <h3 style="margin:0 0 6px; font-size:16px;">You're not logged in</h3>
+      <p class="muted" style="font-size:13.5px; margin:0 0 20px;">Log in or create an account to view and edit your ManakMitra profile.</p>
+      <button class="btn btn-primary" id="settings-login-btn">Log in / Sign up</button>
+    </div>
+
+    <!-- shown when logged in -->
+    <div id="settings-logged-in" hidden>
+      <div class="card card--glass" data-tilt style="padding:26px; margin-bottom:20px; max-width:640px;">
+        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:6px;">
+          <h3 style="margin:0; font-size:15.5px;">Profile</h3>
+          <span class="provider-pill" id="settings-provider-pill"></span>
+        </div>
+        <p class="muted" style="font-size:13px; margin:0 0 6px;">Changing these details may require confirmation before the change is applied.</p>
+
+        <div class="settings-row" id="row-name" data-field="name">
+          <div>
+            <div class="label">Full name</div>
+            <div class="settings-value" id="val-name">—</div>
+          </div>
+          <button class="btn btn-ghost btn-sm" data-edit="name">Edit</button>
+        </div>
+
+        <div class="settings-row" id="row-email" data-field="email">
+          <div>
+            <div class="label">Email</div>
+            <div class="settings-value" id="val-email">—</div>
+          </div>
+          <button class="btn btn-ghost btn-sm" data-edit="email">Edit</button>
+        </div>
+
+      </div>
+
+      <div class="card card--glass" data-tilt style="padding:26px; margin-bottom:20px; max-width:640px;">
+        <h3 style="margin:0 0 6px; font-size:15.5px;">Change your password</h3>
+        <p class="muted" style="font-size:13px; margin:0 0 18px;">Use your current password to confirm the password change.</p>
+        <form id="password-form" style="display:flex; flex-direction:column; gap:14px;">
+          <div>
+            <label class="label">Current password</label>
+            <div class="field"><input required type="password" id="pw-current" placeholder="••••••••" autocomplete="current-password"></div>
+          </div>
+          <div style="display:grid; grid-template-columns:1fr 1fr; gap:14px;">
+            <div>
+              <label class="label">New password</label>
+              <div class="field"><input required type="password" id="pw-new" minlength="6" placeholder="••••••••" autocomplete="new-password"></div>
+            </div>
+            <div>
+              <label class="label">Confirm new password</label>
+              <div class="field"><input required type="password" id="pw-confirm" minlength="6" placeholder="••••••••" autocomplete="new-password"></div>
+            </div>
+          </div>
+          <div class="auth-error" id="pw-error"></div>
+          <button type="submit" class="btn btn-primary" style="width:100%;">Change your password here</button>
+        </form>
+      </div>
+
+      <div class="card card--glass" data-tilt style="padding:26px; max-width:640px; display:flex; align-items:center; justify-content:space-between;">
+        <div>
+          <h3 style="margin:0 0 4px; font-size:15.5px;">Log out</h3>
+          <p class="muted" style="font-size:13px; margin:0;">End your session on this device.</p>
+        </div>
+        <button class="btn btn-ghost" id="settings-logout-btn">Log out</button>
+      </div>
+    </div>
+  </main>
+</div>
+
+<script src="js/config.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="js/nav.js"></script>
+<script src="js/textfx.js"></script>
+<script src="js/auth.js"></script>
+<script src="js/app.js"></script>
+<script>
+  function fieldMeta(field){
+    return {
+      name:  { label: "name" },
+      email: { label: "email" },
+    }[field];
+  }
+
+  function renderProfile(){
+    const user = MM_AUTH.getCurrentUser();
+    const loggedOut = document.getElementById("settings-logged-out");
+    const loggedIn = document.getElementById("settings-logged-in");
+    if(!user){
+      loggedOut.hidden = false;
+      loggedIn.hidden = true;
+      return;
+    }
+    loggedOut.hidden = true;
+    loggedIn.hidden = false;
+    document.getElementById("val-name").textContent = user.name || "—";
+    document.getElementById("val-email").textContent = user.email || "Not added";
+    document.getElementById("settings-provider-pill").textContent = "Email account";
+  }
+
+  function startEdit(field){
+    const row = document.getElementById("row-" + field);
+    const user = MM_AUTH.getCurrentUser();
+    const current = user[field] || "";
+    const meta = fieldMeta(field);
+    row.innerHTML = `
+      <form class="settings-edit-form" id="edit-form-${field}">
+        <div class="field">
+          <input id="edit-input-${field}" value="${current.replace(/"/g,'&quot;')}" placeholder="${field === 'email' ? 'you@gmail.com' : 'Your name'}">
+        </div>
+        <button type="submit" class="btn btn-primary btn-sm">Save</button>
+        <button type="button" class="btn btn-ghost btn-sm" id="cancel-${field}">Cancel</button>
+      </form>
+      <div class="auth-error" id="edit-error-${field}" style="width:100%;"></div>
+    `;
+    document.getElementById("cancel-" + field).addEventListener("click", renderProfile);
+    document.getElementById("edit-form-" + field).addEventListener("submit", async e => {
+      e.preventDefault();
+      const errEl = document.getElementById("edit-error-" + field);
+      errEl.textContent = "";
+      const val = document.getElementById("edit-input-" + field).value.trim();
+      const submitBtn = e.target.querySelector("button[type=submit]");
+
+      if(field === "name" && !val){ errEl.textContent = "Name can't be empty."; return; }
+      if(field === "email" && !MM_AUTH.emailDomainOk(val)){ errEl.textContent = `Use an email ending in ${MM_AUTH.ALLOWED_EMAIL_DOMAINS.join(", ")}.`; return; }
+      // Supabase validates uniqueness and verification requirements for email changes.
+
+      submitBtn.disabled = true;
+
+      if(field === "name"){
+        const { error } = await MM_AUTH.updateName(val);
+        submitBtn.disabled = false;
+        if(error){ errEl.textContent = error; return; }
+        showToast(`Your ${meta.label} has been updated.`);
+        renderProfile();
+        return;
+      }
+
+      if(field === "email"){
+        const { error } = await MM_AUTH.updateEmail(val);
+        submitBtn.disabled = false;
+        if(error){ errEl.textContent = error; return; }
+        const verified = await MM_AUTH.openOtpModal({
+          message: `We've sent a verification code to ${val}. Enter it below to confirm the change.`,
+          verify: code => MM_AUTH.verifyEmailChange(val, code),
+          resend: () => MM_AUTH.updateEmail(val),
+        });
+        showToast(verified ? `Your ${meta.label} has been updated.` : "Change cancelled.");
+        renderProfile();
+        return;
+      }
+
+    });
+  }
+
+  document.addEventListener("DOMContentLoaded", () => {
+    renderSidebar("settings.html");
+    renderProfile();
+
+    document.getElementById("settings-login-btn").addEventListener("click", () => MM_AUTH.openAuthModal("login"));
+    document.getElementById("settings-logout-btn").addEventListener("click", () => { MM_AUTH.logout(); renderProfile(); });
+
+    document.body.addEventListener("click", e => {
+      const btn = e.target.closest("[data-edit]");
+      if(btn) startEdit(btn.dataset.edit);
+    });
+
+    document.getElementById("password-form").addEventListener("submit", async e => {
+      e.preventDefault();
+      const user = MM_AUTH.getCurrentUser();
+      if(!user || user.provider !== "email") return;
+      const errEl = document.getElementById("pw-error");
+      errEl.textContent = "";
+      const cur = document.getElementById("pw-current").value;
+      const next = document.getElementById("pw-new").value;
+      const confirm = document.getElementById("pw-confirm").value;
+
+      if(next.length < 6){ errEl.textContent = "New password must be at least 6 characters."; return; }
+      if(next !== confirm){ errEl.textContent = "New passwords do not match."; return; }
+
+      // Re-entering the current password here IS the "prove it's you" step --
+      // Supabase re-authenticates against it before changing anything, so no
+      // separate OTP step is needed (or possible) for password changes.
+      const submitBtn = e.target.querySelector("button[type=submit]");
+      submitBtn.disabled = true;
+      const { error } = await MM_AUTH.changePassword(cur, next);
+      submitBtn.disabled = false;
+      if(error){ errEl.textContent = error; return; }
+      showToast("Your password has been changed.");
+      document.getElementById("password-form").reset();
+    });
+  });
+</script>
+</body>
+</html>

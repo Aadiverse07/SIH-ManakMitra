@@ -1,0 +1,1 @@
+"""ManakMitra backend package."""

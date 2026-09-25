@@ -1,0 +1,1111 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ManakMitra — AI Assistant for Indian Standards &amp; BIS</title>
+<meta name="description" content="Search Indian Standards, explore BIS services and get instant AI-powered answers.">
+<link rel="stylesheet" href="css/style.css">
+<style>
+  /* Neural field, embedded inline as an ambient page background (formerly a
+     one-time splash loaded via <iframe src="neural-field.html">, which lived
+     on its own request/port from the page). It now ships as part of this
+     page: same request, same origin, same port as everything else — just a
+     transparent WebGL layer sitting behind the real content. */
+  #mm-neural-bg{
+    position:fixed; inset:0; z-index:-1; overflow:hidden; pointer-events:none;
+  }
+  #mm-neural-bg #stage{ position:fixed; inset:0; width:100%; height:100%; }
+  #mm-neural-bg canvas{ display:block; }
+  #mm-neural-bg .veil{
+    position:fixed; inset:0;
+    background: radial-gradient(ellipse at 50% 50%, rgba(7,10,19,0) 40%, rgba(7,10,19,0.35) 100%);
+  }
+  /* the brand pill / hints / focus-tag were splash-only UI; hidden here (kept
+     in the DOM, not removed, since the script below still looks them up) */
+  #mm-neural-bg .brand-top,
+  #mm-neural-bg .focus-tag,
+  #mm-neural-bg .hint-bottom{ display:none; }
+
+  /* "ManakAi" wordmark sitting inside the hexagon core. The hex core lives at
+     world-space origin, and since the camera never pans off-axis (only
+     dollies in/out and looks at 0,0,0), the origin always projects to the
+     exact centre of the viewport no matter how the neuron field is rotated
+     or dragged — so this can simply sit pinned dead-centre rather than being
+     re-projected every frame. pointer-events:none keeps it out of the way of
+     drag / raycast handling on the canvas beneath it. */
+  #mm-neural-bg .core-wrap{
+    position:fixed; top:50%; left:50%;
+    transform:translate(-50%,-50%);
+    z-index:1; pointer-events:none;
+    display:flex; align-items:center; justify-content:center;
+    /* gentle idle scale breathing so the core reads as "alive" even though it
+       never blinks/fades like the satellite neurons do */
+    animation: mm-core-breathe 6s ease-in-out infinite;
+  }
+  #mm-neural-bg .core-pill{
+    font-family:'Poppins','Segoe UI',system-ui,sans-serif;
+    font-weight:700;
+    font-size:clamp(15px, 3.4vw, 26px);
+    letter-spacing:0.14em;
+    line-height:1;
+    padding:0;
+    background:linear-gradient(100deg,#eaf7ff 0%,#7fd8ff 28%,#9fb4ff 55%,#c9a9ff 78%,#eaf7ff 100%);
+    background-size:220% 100%;
+    -webkit-background-clip:text; background-clip:text; color:transparent;
+    filter:drop-shadow(0 0 6px rgba(120,190,255,0.55)) drop-shadow(0 0 18px rgba(140,110,255,0.35));
+    animation: mm-core-shimmer 5s linear infinite;
+    white-space:nowrap; text-transform:none;
+  }
+  @keyframes mm-core-shimmer{
+    0%{ background-position:0% 50%; }
+    100%{ background-position:220% 50%; }
+  }
+  @keyframes mm-core-breathe{
+    0%,100%{ transform:translate(-50%,-50%) scale(1); }
+    50%{ transform:translate(-50%,-50%) scale(1.045); }
+  }
+  @media (max-width:520px){
+    #mm-neural-bg .core-pill{ letter-spacing:0.09em; }
+  }
+
+  /* ---- interactive hit-zone for the neural field (Option B) ----
+     The neural canvas itself stays pointer-events:none (so the fixed,
+     full-page ambient background never blocks scrolling or clicking
+     anywhere else on the site). This invisible zone lives INSIDE the
+     hero section instead — normal document flow, not fixed — so it
+     scrolls away with the hero and only ever captures drag/zoom while
+     the hero (and the hex core inside it) is actually the thing on
+     screen. It's the first child of .hero, so later hero children
+     (heading, search bar, buttons) paint above it in normal stacking
+     order and remain clickable. */
+  .hero{ position:relative; }
+  #neural-hitzone{
+    position:absolute; inset:0; z-index:0;
+    pointer-events:auto; cursor:grab; touch-action:none;
+  }
+  #neural-hitzone.grabbing{ cursor:grabbing; }
+</style>
+</head>
+<body>
+
+<!-- Neural field: embedded inline as an ambient page background
+     (no iframe, no separate file/port — same page, same origin). -->
+<div id="mm-neural-bg" aria-hidden="true">
+  <div id="stage"></div>
+  <div class="veil"></div>
+
+  <div class="brand-top" id="brandTop"><span>MANAKMITRA AI</span></div>
+  <div class="focus-tag" id="focusTag">NEURON DETAIL · TAP ELSEWHERE TO RELEASE</div>
+
+  <div class="core-wrap"><div class="core-pill" id="corePill">ManakAi</div></div>
+
+  <div class="hint-bottom" id="hintBottom">
+    <span>DRAG TO ROTATE</span><span class="dot">·</span>
+    <span>SCROLL / PINCH TO ZOOM</span><span class="dot">·</span>
+    <span>TAP A NEURON TO INSPECT IT</span><span class="dot">·</span>
+    <span>HOVER TO DISTURB THE FIELD</span>
+  </div>
+</div>
+
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+(function(){
+function init(){
+
+  // ---------- basic setup ----------
+  const stage = document.getElementById('stage');
+  const scene = new THREE.Scene();
+  const camera = new THREE.PerspectiveCamera(48, window.innerWidth/window.innerHeight, 1, 5000);
+  camera.position.set(0,0,880);
+
+  const renderer = new THREE.WebGLRenderer({ antialias:true, alpha:true });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio||1, 2));
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  stage.appendChild(renderer.domElement);
+
+  const group = new THREE.Group();
+  scene.add(group);
+
+  // ---------- responsive framing ----------
+  // On narrow/short viewports (phones, small tablets) the butterfly layout of
+  // neurons is wide relative to the screen, so pull the camera back to keep
+  // every neuron on-screen instead of letting the wingtips crop off.
+  function responsiveCamDist(){
+    const w = window.innerWidth, h = window.innerHeight;
+    const base = 880;
+    const shortestSide = Math.min(w, h);
+    if(shortestSide >= 900) return base;
+    const scale = 900/Math.max(420, shortestSide);
+    return Math.min(1400, base*Math.min(1.55, scale));
+  }
+  function applyResize(){
+    camera.aspect = window.innerWidth/window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    CAM_DEFAULT = responsiveCamDist();
+    if(focusIndex<0 && !pinching) camTargetDist = CAM_DEFAULT;
+  }
+  window.addEventListener('resize', applyResize);
+  window.addEventListener('orientationchange', applyResize);
+
+  // ---------- textures ----------
+  function makeGlowTexture(inner, outer){
+    const size = 128;
+    const c = document.createElement('canvas'); c.width=c.height=size;
+    const ctx = c.getContext('2d');
+    const g = ctx.createRadialGradient(size/2,size/2,0, size/2,size/2,size/2);
+    g.addColorStop(0, inner); g.addColorStop(0.4, outer); g.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = g; ctx.fillRect(0,0,size,size);
+    const tex = new THREE.CanvasTexture(c); tex.needsUpdate = true; return tex;
+  }
+  const glowTexBlue   = makeGlowTexture('rgba(36,141,173,0.9)', 'rgba(36,141,173,0.22)');
+  const glowTexViolet = makeGlowTexture('rgba(95,73,173,0.9)', 'rgba(95,73,173,0.22)');
+  const starTex       = makeGlowTexture('rgba(255,255,255,1)', 'rgba(95,110,180,0.35)');
+
+  // ---------- lighting (gives the membranes real shading instead of flat color) ----------
+  const ambientLight = new THREE.AmbientLight(0x8fa0d8, 0.6);
+  scene.add(ambientLight);
+  const keyLight = new THREE.PointLight(0x9fe0f0, 1.1, 3000, 1.6);
+  keyLight.position.set(300,200,700);
+  scene.add(keyLight);
+  const fillLight = new THREE.PointLight(0xa78bff, 0.75, 3000, 1.8);
+  fillLight.position.set(-450,-260,-250);
+  scene.add(fillLight);
+
+  // ---------- manual buffer-geometry merge (no BufferGeometryUtils on this CDN build) ----------
+  function mergeGeoEntries(entries){
+    let totalV=0, totalI=0;
+    entries.forEach(e=>{ totalV+=e.geo.attributes.position.count; totalI+=e.geo.index.count; });
+    const positions = new Float32Array(totalV*3);
+    const normals = new Float32Array(totalV*3);
+    const colors = new Float32Array(totalV*3);
+    const indices = new Uint32Array(totalI);
+    let vOff=0, iOff=0;
+    entries.forEach(e=>{
+      const p = e.geo.attributes.position.array;
+      const nrm = e.geo.attributes.normal.array;
+      positions.set(p, vOff*3);
+      normals.set(nrm, vOff*3);
+      const vCount = e.geo.attributes.position.count;
+      for(let i=0;i<vCount;i++){
+        colors[(vOff+i)*3]=e.color.r; colors[(vOff+i)*3+1]=e.color.g; colors[(vOff+i)*3+2]=e.color.b;
+      }
+      const idx = e.geo.index.array;
+      for(let i=0;i<idx.length;i++) indices[iOff+i]=idx[i]+vOff;
+      vOff+=vCount; iOff+=idx.length;
+    });
+    const merged = new THREE.BufferGeometry();
+    merged.setAttribute('position', new THREE.BufferAttribute(positions,3));
+    merged.setAttribute('normal', new THREE.BufferAttribute(normals,3));
+    merged.setAttribute('color', new THREE.BufferAttribute(colors,3));
+    merged.setIndex(new THREE.BufferAttribute(indices,1));
+    return merged;
+  }
+  // a single procedural branch segment becomes a tapered 3D tube (not a flat line)
+  function segmentToCylinder(a,b,rTop,rBottom,radialSegments){
+    const dir = new THREE.Vector3().subVectors(b,a);
+    const length = dir.length();
+    if(length<0.0001) return null;
+    const geo = new THREE.CylinderGeometry(rTop, rBottom, length, radialSegments, 1, true);
+    const mid = new THREE.Vector3().addVectors(a,b).multiplyScalar(0.5);
+    const quat = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0,1,0), dir.normalize());
+    // Three.js r128 compatibility: BufferGeometry.applyQuaternion() is unavailable.
+    const rotMatrix = new THREE.Matrix4().makeRotationFromQuaternion(quat);
+    geo.applyMatrix4(rotMatrix);
+    geo.translate(mid.x,mid.y,mid.z);
+    return geo;
+  }
+
+  // ---------- helpers for organic branching ----------
+  function randomUnitVector(){
+    const u = Math.random()*2-1, theta = Math.random()*Math.PI*2, r = Math.sqrt(Math.max(0,1-u*u));
+    return new THREE.Vector3(r*Math.cos(theta), r*Math.sin(theta), u);
+  }
+  function randomPerp(dir){
+    const arb = Math.abs(dir.y) < 0.9 ? new THREE.Vector3(0,1,0) : new THREE.Vector3(1,0,0);
+    return new THREE.Vector3().crossVectors(dir, arb).normalize();
+  }
+  function branchDir(dir, spread){
+    const perp = randomPerp(dir).applyAxisAngle(dir, Math.random()*Math.PI*2);
+    const angle = spread*(0.45+Math.random()*0.65);
+    return dir.clone().applyAxisAngle(perp, angle).normalize();
+  }
+  function growDendrite(origin, dir, length, depth, maxDepth, segs, terminals, spread){
+    const mid = origin.clone().add(dir.clone().multiplyScalar(length*0.5))
+      .add(randomPerp(dir).multiplyScalar(length*0.16*(Math.random()-0.5)));
+    const end = origin.clone().add(dir.clone().multiplyScalar(length))
+      .add(randomPerp(dir).multiplyScalar(length*0.08*(Math.random()-0.5)));
+    const curve = new THREE.CatmullRomCurve3([origin, mid, end]);
+    const pts = curve.getPoints(4);
+    for(let i=0;i<pts.length-1;i++) segs.push({a:pts[i], b:pts[i+1], depth});
+    if(depth < maxDepth){
+      const n = depth===0 ? (2+Math.floor(Math.random()*2)) : (Math.random()<0.55?2:1);
+      for(let i=0;i<n;i++) growDendrite(end, branchDir(dir, spread), length*0.6, depth+1, maxDepth, segs, terminals, spread*0.92);
+    } else {
+      terminals.push({p:end, size:1.1});
+    }
+  }
+  function growAxon(origin, dir, length, segs, terminals, axonInfo){
+    const mid = origin.clone().add(dir.clone().multiplyScalar(length*0.52));
+    const end = origin.clone().add(dir.clone().multiplyScalar(length));
+    const curve = new THREE.CatmullRomCurve3([origin, mid, end]);
+    if(axonInfo) axonInfo.curve = curve; // exposed so a real signal can travel this path
+    const pts = curve.getPoints(7);
+    for(let i=0;i<pts.length-1;i++) segs.push({a:pts[i], b:pts[i+1], depth:0, axon:true});
+    const twigs = 3+Math.floor(Math.random()*2);
+    for(let i=0;i<twigs;i++){
+      const nd = branchDir(dir, 0.85);
+      const tEnd = end.clone().add(nd.multiplyScalar(6+Math.random()*5));
+      segs.push({a:end,b:tEnd,depth:1,axon:true});
+      terminals.push({p:tEnd, size:1.8});
+    }
+  }
+  // builds one merged, lit, volumetric mesh per neuron: tapered dendrite/axon tubes
+  // (thick near the soma, thinning at each bifurcation, banded like a myelin sheath
+  // on the axon) plus small glowing synaptic bulbs at every terminal.
+  function buildNeuronStructure(baseColorHex, axonInfo){
+    const segs = [], terminals = [];
+    const dendriteCount = 5 + Math.floor(Math.random()*2);
+    for(let i=0;i<dendriteCount;i++){
+      growDendrite(new THREE.Vector3(0,0,0), randomUnitVector(), 9+Math.random()*5, 0, 3, segs, terminals, 0.62);
+    }
+    growAxon(new THREE.Vector3(0,0,0), randomUnitVector(), 22+Math.random()*10, segs, terminals, axonInfo);
+
+    const baseColor = new THREE.Color(baseColorHex);
+    const entries = [];
+    segs.forEach((s,i)=>{
+      let rTop, rBottom, brightness;
+      if(s.axon){
+        const isTwig = s.depth>=1;
+        if(isTwig){ rTop=0.55; rBottom=0.42; brightness=1.25; }
+        else {
+          const band = i%2===0; // alternating myelin internode / node-of-Ranvier look
+          rTop = band?1.15:0.85; rBottom = band?1.05:0.8; brightness = band?1.05:0.6;
+        }
+      } else {
+        const base = 0.95*Math.pow(0.66, s.depth);
+        rTop = base; rBottom = base*1.12;
+        brightness = Math.max(0.35, 1-s.depth*0.2);
+      }
+      const geo = segmentToCylinder(s.a, s.b, rTop, rBottom, 6);
+      if(geo) entries.push({ geo, color: baseColor.clone().multiplyScalar(brightness) });
+    });
+    terminals.forEach(t=>{
+      const sg = new THREE.SphereGeometry(Math.max(0.9, t.size*0.85), 6, 6);
+      sg.translate(t.p.x, t.p.y, t.p.z);
+      entries.push({ geo: sg, color: baseColor.clone().lerp(new THREE.Color(0xbfe6ff), 0.4) });
+    });
+    return { geometry: mergeGeoEntries(entries) };
+  }
+  function makeSomaGeometry(){
+    const g = new THREE.IcosahedronGeometry(4.6, 2);
+    const pos = g.attributes.position;
+    const v = new THREE.Vector3();
+    for(let i=0;i<pos.count;i++){
+      v.fromBufferAttribute(pos, i);
+      const n = v.clone().normalize();
+      const jitter = 0.82 + Math.random()*0.4;
+      v.copy(n.multiplyScalar(v.length()*jitter));
+      pos.setXYZ(i, v.x, v.y, v.z);
+    }
+    g.computeVertexNormals();
+    return g;
+  }
+
+  // ---------- hexagon core geometry constants (shared by the connections
+  // below AND the 3D hex prism built further down, so both agree on size) ----------
+  const CORE_RADIUS = 62;      // circumradius of the hexagon core
+  const CORE_HEX_OFFSET = Math.PI/6; // rotates the hex so a flat edge (not a vertex) faces up
+  const CORE_BORDER_MARGIN = 1.1; // push connection anchors just past the mesh edge, into its glow
+
+  // distance from centre to a regular hexagon's own boundary, along a given angle
+  function hexBoundaryRadius(angle, R, offset){
+    const seg = Math.PI/3; // 60° per side
+    let a = ((angle - offset) % seg + seg) % seg; // wrap into [0, seg)
+    a -= seg/2; // recentre on the nearest edge midpoint
+    return (R*Math.cos(seg/2)) / Math.cos(a);
+  }
+  // world-space point on the hexagon's border, in the direction of (dirX, dirY)
+  function hexBorderPoint(dirX, dirY, R, offset, margin){
+    const angle = Math.atan2(dirY, dirX);
+    const r = hexBoundaryRadius(angle, R, offset) * margin;
+    return new THREE.Vector3(Math.cos(angle)*r, Math.sin(angle)*r, 0);
+  }
+
+  // ---------- neuron layout (mirrored butterfly) ----------
+  const half = [
+    {x:-594,y:316},{x:-416,y:187},{x:-254,y:288},{x:-118,y:111},
+    {x:-532,y:111},{x:-416,y:2},{x:-416,y:-187},{x:-273,y:-291},{x:-594,y:-360}
+  ];
+  const rand = (a,b)=> a + Math.random()*(b-a);
+  const neurons = [];
+  half.forEach((p)=>{
+    [-1,1].forEach(side=>{
+      const x = p.x*side, y = p.y;
+      const dist = Math.sqrt(p.x*p.x+p.y*p.y);
+      const z = -(dist-260)*0.28 + rand(-30,30);
+      neurons.push({
+        pos: new THREE.Vector3(x*0.62, y*0.62, z*0.62),
+        phase: Math.random()*Math.PI*2,
+        colorMode: Math.random()<0.5 ? 'blue' : 'violet'
+      });
+    });
+  });
+
+  // ---------- connections: hexagon BORDER -> neuron (never the centre) ----------
+  neurons.forEach(n=>{
+    const borderPt = hexBorderPoint(n.pos.x, n.pos.y, CORE_RADIUS, CORE_HEX_OFFSET, CORE_BORDER_MARGIN);
+    const mid = borderPt.clone().lerp(n.pos, 0.5);
+    mid.x += rand(-40,40); mid.y += rand(-40,40); mid.z += rand(30,90);
+    const curve = new THREE.QuadraticBezierCurve3(borderPt, mid, n.pos);
+    const pts = curve.getPoints(28);
+    const geo = new THREE.BufferGeometry().setFromPoints(pts);
+    const colors = new Float32Array(pts.length*3);
+    const baseColor = n.colorMode==='blue' ? new THREE.Color(0x248dad) : new THREE.Color(0x5f49ad);
+    for(let i=0;i<pts.length;i++){
+      const t = i/(pts.length-1);
+      const c = baseColor.clone().multiplyScalar(0.25+t*0.75);
+      colors[i*3]=c.r; colors[i*3+1]=c.g; colors[i*3+2]=c.b;
+    }
+    geo.setAttribute('color', new THREE.BufferAttribute(colors,3));
+    const mat = new THREE.LineBasicMaterial({ vertexColors:true, transparent:true, opacity:0.55, blending:THREE.NormalBlending, depthWrite:false });
+    group.add(new THREE.Line(geo, mat));
+    n.connMat = mat;
+  });
+
+  // ---------- neuron core / glow / hyper-real detail ----------
+  const pickable = []; // hit-testable objects for raycasting
+  neurons.forEach(n=>{
+    const isBlue = n.colorMode==='blue';
+    const tex = isBlue ? glowTexBlue : glowTexViolet;
+    const colorHex = isBlue ? 0x248dad : 0x5f49ad;
+
+    // soft ambient halo behind everything
+    const glowMat = new THREE.SpriteMaterial({ map: tex, transparent:true, blending:THREE.NormalBlending, depthWrite:false, opacity:0.5 });
+    const glow = new THREE.Sprite(glowMat);
+    glow.scale.set(40,40,1); glow.position.copy(n.pos);
+    group.add(glow); n.glow = glow;
+
+    // fresnel-style rim shell so the membrane reads as a lit, rounded 3D cell
+    const rimGeo = new THREE.IcosahedronGeometry(6.2, 2);
+    const rimMat = new THREE.MeshBasicMaterial({ color: colorHex, transparent:true, opacity:0.22, side:THREE.BackSide, blending:THREE.NormalBlending, depthWrite:false });
+    const rim = new THREE.Mesh(rimGeo, rimMat);
+    rim.position.copy(n.pos);
+    group.add(rim); n.rimMat = rimMat;
+
+    // soma: lit, translucent, organic membrane (was a flat unlit blob before)
+    const somaGeo = makeSomaGeometry();
+    const somaMat = new THREE.MeshStandardMaterial({
+      color: isBlue?0xaad9ec:0xcabdf0, roughness:0.32, metalness:0.04,
+      transparent:true, opacity:0.93,
+      emissive: new THREE.Color(colorHex).multiplyScalar(0.3), emissiveIntensity:1
+    });
+    const soma = new THREE.Mesh(somaGeo, somaMat);
+    soma.position.copy(n.pos);
+    soma.userData.neuron = n;
+    group.add(soma);
+    n.soma = soma; n.somaMat = somaMat;
+    pickable.push(soma);
+
+    // nucleus, faintly visible through the translucent membrane
+    const nucleusGeo = new THREE.IcosahedronGeometry(1.9, 1);
+    const nucleusMat = new THREE.MeshStandardMaterial({ color:0x232042, roughness:0.7, transparent:true, opacity:0.75 });
+    const nucleus = new THREE.Mesh(nucleusGeo, nucleusMat);
+    nucleus.position.copy(n.pos);
+    group.add(nucleus);
+
+    // enlarged invisible hit-sphere: makes every neuron much easier to tap/click,
+    // especially on touch, without changing how anything looks
+    const hitGeo = new THREE.SphereGeometry(13, 8, 8);
+    const hitMat = new THREE.MeshBasicMaterial({ visible:false });
+    const hitMesh = new THREE.Mesh(hitGeo, hitMat);
+    hitMesh.position.copy(n.pos);
+    hitMesh.userData.neuron = n;
+    group.add(hitMesh);
+    pickable.push(hitMesh);
+
+    // dendrites + axon + synaptic bulbs: one merged, lit, volumetric mesh
+    const axonInfo = {};
+    const structure = buildNeuronStructure(colorHex, axonInfo);
+    const detailMat = new THREE.MeshStandardMaterial({
+      vertexColors:true, roughness:0.4, metalness:0.05,
+      transparent:true, opacity:0.3,
+      emissive: new THREE.Color(colorHex).multiplyScalar(0.15), emissiveIntensity:1
+    });
+    const detailMesh = new THREE.Mesh(structure.geometry, detailMat);
+
+    // a small bright signal that actually travels down the axon
+    const pulseMat = new THREE.SpriteMaterial({ map:starTex, color:colorHex, transparent:true, blending:THREE.NormalBlending, depthWrite:false, opacity:0.75 });
+    const pulseSprite = new THREE.Sprite(pulseMat);
+    pulseSprite.scale.set(5.5,5.5,1);
+
+    const detailGroup = new THREE.Group();
+    detailGroup.position.copy(n.pos);
+    detailGroup.add(detailMesh, pulseSprite);
+    detailGroup.rotation.set(rand(0,Math.PI*2), rand(0,Math.PI*2), 0);
+    group.add(detailGroup);
+
+    n.detailGroup = detailGroup;
+    n.detailMat = detailMat;
+    n.pulseSprite = pulseSprite;
+    n.axonCurve = axonInfo.curve;
+    n.pulseT = Math.random();
+    n.pulseSpeed = 0.16;
+  });
+
+  // ---------- orbiting stars ----------
+  const starsPerNeuron = 16;
+  const starData = [];
+  neurons.forEach((n, ni)=>{
+    for(let i=0;i<starsPerNeuron;i++){
+      starData.push({ neuronIndex:ni, radius:rand(14,42), speed:rand(0.25,0.7)*(Math.random()<0.5?-1:1),
+        incl:rand(0,Math.PI), baseAngle:rand(0,Math.PI*2), size:rand(2.2,5.2), disp:new THREE.Vector3(0,0,0),
+        // makes the orbit radius itself undulate, so each particle traces a little
+        // traveling wave around its neuron instead of a flat circle
+        waveAmp:rand(2,7), waveFreq:rand(2,5)*(Math.random()<0.5?-1:1), wavePhase:rand(0,Math.PI*2) });
+    }
+  });
+  const starCount = starData.length;
+  const starGeo = new THREE.BufferGeometry();
+  const starPos = new Float32Array(starCount*3);
+  const starCol = new Float32Array(starCount*3);
+  const colBlue = new THREE.Color(0x248dad), colViolet = new THREE.Color(0x5f49ad);
+  starData.forEach((s,i)=>{
+    const c = neurons[s.neuronIndex].colorMode==='blue' ? colBlue : colViolet;
+    starCol[i*3]=c.r; starCol[i*3+1]=c.g; starCol[i*3+2]=c.b;
+  });
+  starGeo.setAttribute('position', new THREE.BufferAttribute(starPos,3));
+  starGeo.setAttribute('color', new THREE.BufferAttribute(starCol,3));
+  const starMat = new THREE.PointsMaterial({ size:5.2, map:starTex, transparent:true, depthWrite:false, blending:THREE.NormalBlending, vertexColors:true, sizeAttenuation:true });
+  const starPoints = new THREE.Points(starGeo, starMat);
+  group.add(starPoints);
+
+  // radiating threads to a few of each neuron's own stars
+  const threadPickCount = 4;
+  const threadIndices = [];
+  neurons.forEach((n, ni)=>{
+    const base = ni*starsPerNeuron;
+    for(let k=0;k<threadPickCount;k++) threadIndices.push(base + Math.floor(rand(0,starsPerNeuron)));
+  });
+  const threadGeo = new THREE.BufferGeometry();
+  const threadPos = new Float32Array(threadIndices.length*2*3);
+  threadGeo.setAttribute('position', new THREE.BufferAttribute(threadPos,3));
+  const threadMat = new THREE.LineBasicMaterial({ color:0x6a5fb0, transparent:true, opacity:0.22, blending:THREE.NormalBlending, depthWrite:false });
+  const threads = new THREE.LineSegments(threadGeo, threadMat);
+  group.add(threads);
+
+  // ---------- background dust ----------
+  const dustCount = 500;
+  const dustGeo = new THREE.BufferGeometry();
+  const dustPos = new Float32Array(dustCount*3);
+  for(let i=0;i<dustCount;i++){
+    const r = rand(700,1500), theta = rand(0,Math.PI*2), phi = Math.acos(rand(-1,1));
+    dustPos[i*3]=r*Math.sin(phi)*Math.cos(theta); dustPos[i*3+1]=r*Math.sin(phi)*Math.sin(theta); dustPos[i*3+2]=r*Math.cos(phi)-400;
+  }
+  dustGeo.setAttribute('position', new THREE.BufferAttribute(dustPos,3));
+  const dustMat = new THREE.PointsMaterial({ size:1.6, map:starTex, transparent:true, opacity:0.5, depthWrite:false, blending:THREE.NormalBlending, color:0x7a86c9 });
+  const dust = new THREE.Points(dustGeo, dustMat);
+  scene.add(dust);
+
+  // ---------- distant field neurons (thousands, lightweight, pulsing) ----------
+  // These are cheap stand-ins for the hero neurons above: no dendrites, just a
+  // glowing point per neuron, grouped into loose clusters with a few faint
+  // links each so the field still reads as a network rather than plain dust.
+  const FIELD_CLUSTERS = 40;
+  const FIELD_PER_CLUSTER = 84;
+  const fieldCount = FIELD_CLUSTERS * FIELD_PER_CLUSTER;
+
+  const fieldPositions = new Float32Array(fieldCount*3);
+  const fieldColors = new Float32Array(fieldCount*3);
+  const fieldSizes = new Float32Array(fieldCount);
+  const fieldPhases = new Float32Array(fieldCount);
+  const fieldLinePos = [];
+  const fieldLineCol = [];
+
+  const fieldBlue = new THREE.Color(0x248dad);
+  const fieldViolet = new THREE.Color(0x5f49ad);
+  const fieldWhite = new THREE.Color(0xbcd6f2);
+
+  let fIdx = 0;
+  for(let c=0;c<FIELD_CLUSTERS;c++){
+    const cTheta = rand(0,Math.PI*2), cPhi = Math.acos(rand(-1,1));
+    const cR = rand(340,1150);
+    const cx = cR*Math.sin(cPhi)*Math.cos(cTheta);
+    const cy = cR*Math.sin(cPhi)*Math.sin(cTheta)*0.7;
+    const cz = cR*Math.cos(cPhi) - 200;
+    const spread = rand(45,130);
+    const clusterBlue = Math.random()<0.5;
+    const base = clusterBlue ? fieldBlue : fieldViolet;
+    const startIdx = fIdx;
+
+    for(let k=0;k<FIELD_PER_CLUSTER;k++){
+      const lx = cx + rand(-1,1)*spread;
+      const ly = cy + rand(-1,1)*spread;
+      const lz = cz + rand(-1,1)*spread;
+      fieldPositions[fIdx*3]=lx; fieldPositions[fIdx*3+1]=ly; fieldPositions[fIdx*3+2]=lz;
+      const col = base.clone().lerp(fieldWhite, Math.random()*0.35);
+      fieldColors[fIdx*3]=col.r; fieldColors[fIdx*3+1]=col.g; fieldColors[fIdx*3+2]=col.b;
+      fieldSizes[fIdx] = rand(1.6,4.2);
+      fieldPhases[fIdx] = rand(0,Math.PI*2);
+      fIdx++;
+    }
+    // sparse links inside each cluster, hinting at a tiny local network
+    const linksHere = Math.floor(FIELD_PER_CLUSTER*0.45);
+    for(let l=0;l<linksHere;l++){
+      const a = startIdx + Math.floor(rand(0,FIELD_PER_CLUSTER));
+      const b = startIdx + Math.floor(rand(0,FIELD_PER_CLUSTER));
+      if(a===b) continue;
+      fieldLinePos.push(fieldPositions[a*3],fieldPositions[a*3+1],fieldPositions[a*3+2],
+                         fieldPositions[b*3],fieldPositions[b*3+1],fieldPositions[b*3+2]);
+      fieldLineCol.push(base.r,base.g,base.b, base.r,base.g,base.b);
+    }
+  }
+
+  const fieldGeo = new THREE.BufferGeometry();
+  fieldGeo.setAttribute('position', new THREE.BufferAttribute(fieldPositions,3));
+  fieldGeo.setAttribute('color', new THREE.BufferAttribute(fieldColors,3));
+  fieldGeo.setAttribute('aSize', new THREE.BufferAttribute(fieldSizes,1));
+  fieldGeo.setAttribute('aPhase', new THREE.BufferAttribute(fieldPhases,1));
+
+  const fieldMat = new THREE.ShaderMaterial({
+    uniforms: { uTime: { value: 0 } },
+    vertexColors: true,
+    transparent: true,
+    depthWrite: false,
+    blending: THREE.NormalBlending,
+    vertexShader: `
+      attribute float aSize;
+      attribute float aPhase;
+      uniform float uTime;
+      varying vec3 vColor;
+      varying float vAlpha;
+      void main(){
+        vColor = color;
+        vAlpha = 0.35 + 0.65*(0.5+0.5*sin(uTime*0.9 + aPhase));
+        vec4 mvPosition = modelViewMatrix * vec4(position,1.0);
+        gl_PointSize = aSize * (420.0 / -mvPosition.z);
+        gl_Position = projectionMatrix * mvPosition;
+      }
+    `,
+    fragmentShader: `
+      varying vec3 vColor;
+      varying float vAlpha;
+      void main(){
+        float d = length(gl_PointCoord - vec2(0.5));
+        float glow = smoothstep(0.5, 0.0, d);
+        gl_FragColor = vec4(vColor, glow*vAlpha*0.9);
+      }
+    `
+  });
+  const fieldPoints = new THREE.Points(fieldGeo, fieldMat);
+  group.add(fieldPoints);
+
+  const fieldLineGeo = new THREE.BufferGeometry();
+  fieldLineGeo.setAttribute('position', new THREE.Float32BufferAttribute(fieldLinePos,3));
+  fieldLineGeo.setAttribute('color', new THREE.Float32BufferAttribute(fieldLineCol,3));
+  const fieldLineMat = new THREE.LineBasicMaterial({ vertexColors:true, transparent:true, opacity:0.18, blending:THREE.NormalBlending, depthWrite:false });
+  const fieldLines = new THREE.LineSegments(fieldLineGeo, fieldLineMat);
+  group.add(fieldLines);
+
+  // ---------- 3D hexagon core (the "ManakAi" mark, now a real rotating hex prism
+  // in world space, not just a flat CSS box) ----------
+  const hexRadius = CORE_RADIUS, hexDepth = 24;
+  const hexGeo = new THREE.CylinderGeometry(hexRadius, hexRadius, hexDepth, 6, 1, true);
+  {
+    // sweep each vertex's angle around the ring from theme cyan to theme violet,
+    // echoing the site's cyan -> violet brand gradient
+    const posAttr = hexGeo.attributes.position;
+    const hexColors = new Float32Array(posAttr.count*3);
+    const hexCyan = new THREE.Color(0x248dad);
+    const hexViolet = new THREE.Color(0x5f49ad);
+    const v = new THREE.Vector3();
+    for(let i=0;i<posAttr.count;i++){
+      v.fromBufferAttribute(posAttr, i);
+      const ang = (Math.atan2(v.z, v.x) + Math.PI) / (Math.PI*2);
+      const c = hexCyan.clone().lerp(hexViolet, ang);
+      hexColors[i*3]=c.r; hexColors[i*3+1]=c.g; hexColors[i*3+2]=c.b;
+    }
+    hexGeo.setAttribute('color', new THREE.BufferAttribute(hexColors,3));
+  }
+  const hexFaceMat = new THREE.MeshStandardMaterial({
+    vertexColors:true, roughness:0.3, metalness:0.1, transparent:true, opacity:0.22,
+    side:THREE.DoubleSide, emissive:0x3a2f8a, emissiveIntensity:0.5
+  });
+  const hexFace = new THREE.Mesh(hexGeo, hexFaceMat);
+
+  // crisp glowing rim tracing every edge of the hexagonal prism
+  const hexRimMat = new THREE.LineBasicMaterial({ color:0x35a0c8, transparent:true, opacity:0.8, blending:THREE.NormalBlending });
+  const hexRim = new THREE.LineSegments(new THREE.EdgesGeometry(hexGeo, 1), hexRimMat);
+
+  // two flat hexagon caps (front/back) so it reads as a solid gem, not a hollow tube
+  const hexCapGeo = new THREE.CircleGeometry(hexRadius, 6);
+  const hexCapMat = new THREE.MeshStandardMaterial({
+    color:0x8fbfe0, roughness:0.25, metalness:0.15, transparent:true, opacity:0.16,
+    side:THREE.DoubleSide, emissive:0x4a3fa0, emissiveIntensity:0.4
+  });
+  const hexCapFront = new THREE.Mesh(hexCapGeo, hexCapMat);
+  hexCapFront.rotation.x = Math.PI/2; hexCapFront.position.y = hexDepth/2;
+  const hexCapBack = hexCapFront.clone();
+  hexCapBack.position.y = -hexDepth/2;
+
+  const hexCore = new THREE.Group();
+  hexCore.add(hexFace, hexRim, hexCapFront, hexCapBack);
+  hexCore.rotation.x = Math.PI/2; // stand the hex prism upright, facing the camera
+  hexCore.rotation.z = CORE_HEX_OFFSET; // start aligned with the border the connections attach to
+  group.add(hexCore);
+
+  // ---------- hover disturbance: world-space billboard plane (always faces camera) ----------
+  const hoverPlane = new THREE.Mesh(new THREE.PlaneGeometry(6000,6000), new THREE.MeshBasicMaterial({ visible:false }));
+  scene.add(hoverPlane);
+
+  const raycaster = new THREE.Raycaster();
+  const mouseNDC = new THREE.Vector2(999,999);
+  let hoverLocalPoint = null;
+  let hoverActiveUntil = 0;
+  let hoveredNeuron = null;
+
+  function updatePointer(clientX, clientY){
+    const rect = renderer.domElement.getBoundingClientRect();
+    mouseNDC.x = ((clientX-rect.left)/rect.width)*2-1;
+    mouseNDC.y = -((clientY-rect.top)/rect.height)*2+1;
+  }
+
+  // ---------- unified pointer drag (with capture) ----------
+  let dragging = false, moved = false;
+  let lastX=0, lastY=0, downX=0, downY=0;
+  let velX=0, velY=0;
+  const rot = { x:0, y:0 };
+  let focusIndex = -1;
+  const CAM_MIN = 150, CAM_MAX = 1500;
+  let CAM_DEFAULT = 880; // recalculated responsively by applyResize() below
+  let camTargetDist = CAM_DEFAULT;
+
+  const focusTag = document.getElementById('focusTag');
+  const hintBottom = document.getElementById('hintBottom');
+  // Option B interactive scope: a small hit-zone that lives inside .hero in
+  // normal document flow (not the fixed, pointer-events:none canvas layer).
+  // It scrolls away with the hero, so drag-rotate / wheel-zoom / pinch only
+  // ever engages while the hex core is actually the thing on screen — the
+  // rest of the page scrolls and clicks normally everywhere else.
+  const hitzone = document.getElementById('neural-hitzone');
+
+  function setFocus(idx){
+    focusIndex = idx;
+    if(idx >= 0){
+      camTargetDist = 190;
+      focusTag.classList.add('show');
+      hintBottom.style.opacity = 0.35;
+    } else {
+      camTargetDist = CAM_DEFAULT;
+      focusTag.classList.remove('show');
+      hintBottom.style.opacity = 1;
+    }
+  }
+
+  function onPointerDown(e){
+    dragging = true; moved = false;
+    lastX = downX = e.clientX; lastY = downY = e.clientY;
+    hitzone.classList.add('grabbing');
+    try{ hitzone.setPointerCapture(e.pointerId); }catch(err){}
+  }
+  function onPointerMove(e){
+    updatePointer(e.clientX, e.clientY);
+    hoverActiveUntil = performance.now()+500;
+    if(dragging){
+      const dx = e.clientX-lastX, dy = e.clientY-lastY;
+      lastX = e.clientX; lastY = e.clientY;
+      if(Math.abs(e.clientX-downX)+Math.abs(e.clientY-downY) > 8) moved = true;
+      velY = dx*0.0042; velX = dy*0.0042;
+      rot.y += velY;
+      rot.x = Math.max(-0.6, Math.min(0.6, rot.x + velX));
+      if(moved && focusIndex>=0) setFocus(-1);
+    }
+  }
+  function onPointerUp(e){
+    dragging = false;
+    hitzone.classList.remove('grabbing');
+    if(!moved){
+      // treat as a click / tap
+      raycaster.setFromCamera(mouseNDC, camera);
+      const hits = raycaster.intersectObjects(pickable);
+      if(hits.length){
+        const n = hits[0].object.userData.neuron;
+        const idx = neurons.indexOf(n);
+        setFocus(idx === focusIndex ? -1 : idx);
+      } else {
+        setFocus(-1);
+      }
+    }
+    try{ hitzone.releasePointerCapture(e.pointerId); }catch(err){}
+  }
+
+  hitzone.addEventListener('pointerdown', onPointerDown);
+  hitzone.addEventListener('pointermove', onPointerMove);
+  hitzone.addEventListener('pointerup', onPointerUp);
+  hitzone.addEventListener('pointercancel', onPointerUp);
+  hitzone.addEventListener('dblclick', ()=>{
+    setFocus(-1);
+    camTargetDist = CAM_DEFAULT;
+  });
+
+  // pinch zoom (two-finger) alongside pointer drag
+  let pinchStartDist = 0, pinchStartCam = 880, pinching = false;
+  hitzone.addEventListener('touchstart', e=>{
+    if(e.touches.length===2){
+      pinching = true; dragging = false;
+      const dx=e.touches[0].clientX-e.touches[1].clientX, dy=e.touches[0].clientY-e.touches[1].clientY;
+      pinchStartDist = Math.hypot(dx,dy); pinchStartCam = camTargetDist;
+    }
+  }, {passive:true});
+  hitzone.addEventListener('touchmove', e=>{
+    if(e.touches.length===2 && pinching){
+      const dx=e.touches[0].clientX-e.touches[1].clientX, dy=e.touches[0].clientY-e.touches[1].clientY;
+      const d = Math.hypot(dx,dy);
+      const scale = pinchStartDist/Math.max(1,d);
+      camTargetDist = Math.max(CAM_MIN, Math.min(CAM_MAX, pinchStartCam*scale));
+    }
+  }, {passive:true});
+  hitzone.addEventListener('touchend', e=>{ if(e.touches.length<2) pinching=false; });
+
+  hitzone.addEventListener('wheel', e=>{
+    e.preventDefault();
+    if(focusIndex>=0) setFocus(-1);
+    camTargetDist += e.deltaY*0.55;
+    camTargetDist = Math.max(CAM_MIN, Math.min(CAM_MAX, camTargetDist));
+  }, {passive:false});
+
+  // ---------- animation loop ----------
+  const clock = new THREE.Clock();
+  const BLINK_PERIOD = 7.0; // full sleep -> wake -> sleep cycle, per the "glow and fade" spec
+  const tmpVec = new THREE.Vector3();
+  const focusVec = new THREE.Vector3();
+  const slidePos = { x:0, y:0 }; // current group parallax offset, eased toward slideTarget every frame
+  const slideTarget = { x:0, y:0 };
+
+  function animate(){
+    requestAnimationFrame(animate);
+    const t = clock.getElapsedTime();
+    const dt = Math.min(clock.getDelta(), 0.05);
+    const now = performance.now();
+    fieldMat.uniforms.uTime.value = t;
+
+    hexCore.rotation.z += dt*0.16;
+    hexCore.rotation.y = Math.sin(t*0.25)*0.08;
+    const hexPulse = 0.6 + Math.sin(t*0.8)*0.4;
+    hexRimMat.opacity = 0.6 + hexPulse*0.3;
+    hexFaceMat.opacity = 0.16 + hexPulse*0.12;
+
+    if(!dragging){
+      rot.y += velY; rot.x = Math.max(-0.6, Math.min(0.6, rot.x + velX));
+      velX *= 0.92; velY *= 0.92;
+      // idle drift: the field keeps gently turning on its own even before anyone
+      // has touched it, so it never just sits still waiting for input
+      rot.y += 0.00022 + Math.sin(t*0.09)*0.00009;
+      if(focusIndex<0 && Math.abs(mouseNDC.x)<=1 && Math.abs(mouseNDC.y)<=1){
+        rot.y += mouseNDC.x*0.00028;
+        rot.x = Math.max(-0.6, Math.min(0.6, rot.x - mouseNDC.y*0.0002));
+      }
+    }
+
+    // hover "slide": while the pointer is active over the field (and nothing is
+    // focused/dragging) the whole structure pans a little toward the cursor,
+    // a slower, second layer of motion on top of the rotation above
+    if(!dragging && focusIndex<0 && now < hoverActiveUntil && Math.abs(mouseNDC.x)<=1 && Math.abs(mouseNDC.y)<=1){
+      slideTarget.x = mouseNDC.x*34;
+      slideTarget.y = mouseNDC.y*22;
+    } else {
+      slideTarget.x = 0; slideTarget.y = 0;
+    }
+    slidePos.x += (slideTarget.x - slidePos.x)*0.05;
+    slidePos.y += (slideTarget.y - slidePos.y)*0.05;
+    group.position.x = slidePos.x;
+    group.position.y = slidePos.y;
+
+    // closed-loop centering when a neuron is focused
+    if(focusIndex >= 0){
+      const n = neurons[focusIndex];
+      focusVec.copy(n.pos).applyMatrix4(group.matrixWorld);
+      const ndc = focusVec.clone().project(camera);
+      rot.y -= ndc.x*0.045;
+      rot.x += ndc.y*0.045;
+      rot.x = Math.max(-0.75, Math.min(0.75, rot.x));
+    }
+
+    group.rotation.y = rot.y;
+    group.rotation.x = rot.x;
+    group.updateMatrixWorld();
+
+    camera.position.z += (camTargetDist - camera.position.z) * 0.16;
+    camera.lookAt(0,0,0);
+    keyLight.position.copy(camera.position);
+
+    // hover raycast against camera-facing billboard plane
+    if(now < hoverActiveUntil){
+      hoverPlane.quaternion.copy(camera.quaternion);
+      raycaster.setFromCamera(mouseNDC, camera);
+      const hit = raycaster.intersectObject(hoverPlane);
+      hoverLocalPoint = hit.length ? group.worldToLocal(hit[0].point.clone()) : null;
+
+      raycaster.params.Points = { threshold: 8 };
+      const nodeHits = raycaster.intersectObjects(pickable);
+      const nowHover = nodeHits.length ? nodeHits[0].object.userData.neuron : null;
+      if(nowHover !== hoveredNeuron){
+        hoveredNeuron = nowHover;
+        hitzone.classList.toggle('hovering-node', !!hoveredNeuron);
+      }
+    } else {
+      hoverLocalPoint = null;
+    }
+
+    neurons.forEach((n, ni)=>{
+      // sleep -> wake -> sleep, one full cycle every BLINK_PERIOD seconds, each
+      // neuron on its own phase so the field never blinks in unison. Eased with
+      // a squared falloff so it lingers dim ("asleep") rather than spending
+      // equal time bright and dark, then snaps awake with a brighter glow.
+      const raw = (Math.sin((t/BLINK_PERIOD)*Math.PI*2 + n.phase)+1)/2;
+      const pulse = raw*raw*(3-2*raw); // smoothstep, gentler at the extremes
+      const intensity = 0.04 + pulse*0.96; // swings from near-dark to fully lit
+      const isFocused = ni === focusIndex;
+      const isHovered = n === hoveredNeuron;
+      const hoverBoost = isHovered ? 0.28 : 0;
+
+      n.glow.material.opacity = Math.min(1, 0.05 + intensity*0.62 + hoverBoost);
+      const s = 24 + pulse*24 + (isFocused?9:0) + (isHovered?6:0);
+      n.glow.scale.set(s,s,1);
+
+      n.somaMat.opacity = 0.32 + intensity*0.6;
+      n.somaMat.emissiveIntensity = 0.25 + intensity*1.1 + hoverBoost;
+      n.rimMat.opacity = 0.05 + intensity*0.24 + hoverBoost*0.5;
+      n.connMat.opacity = 0.06 + intensity*0.4;
+
+      tmpVec.copy(n.pos).applyMatrix4(group.matrixWorld);
+      const dist = camera.position.distanceTo(tmpVec);
+      let zoomFactor = 1 - (dist-150)/(420-150);
+      zoomFactor = Math.max(0, Math.min(1, zoomFactor));
+      if(isFocused) zoomFactor = Math.max(zoomFactor, 0.9);
+
+      n.detailGroup.rotation.y += dt*0.05;
+      n.detailGroup.rotation.x += dt*0.03;
+      n.detailMat.opacity = (0.16 + zoomFactor*0.62) * (0.45 + intensity*0.55);
+      n.detailMat.emissiveIntensity = 0.6 + intensity*0.7 + hoverBoost;
+
+      // hovering or focusing a neuron visibly excites it: the signal fires faster
+      const speedTarget = isFocused ? 0.62 : (isHovered ? 0.5 : 0.16);
+      n.pulseSpeed += (speedTarget - n.pulseSpeed) * 0.04;
+      n.pulseT = (n.pulseT + dt*n.pulseSpeed) % 1;
+      if(n.axonCurve){
+        const p = n.axonCurve.getPoint(Math.min(0.999, n.pulseT));
+        n.pulseSprite.position.copy(p);
+        const flare = 0.4 + Math.sin(n.pulseT*Math.PI)*0.6;
+        n.pulseSprite.material.opacity = Math.min(1, (0.25+zoomFactor*0.5)*flare + hoverBoost*0.4);
+      }
+    });
+
+    // stars: orbit + hover disturbance
+    const posAttr = starGeo.attributes.position;
+    for(let i=0;i<starCount;i++){
+      const s = starData[i];
+      const n = neurons[s.neuronIndex];
+      const ang = s.baseAngle + t*s.speed;
+      const rWave = s.radius + s.waveAmp*Math.sin(ang*s.waveFreq + s.wavePhase + t*1.4);
+      const ox = rWave*Math.cos(ang);
+      const oz = rWave*Math.sin(ang)*Math.cos(s.incl);
+      const oy = rWave*Math.sin(ang)*Math.sin(s.incl);
+      let bx = n.pos.x+ox, by = n.pos.y+oy, bz = n.pos.z+oz;
+
+      if(hoverLocalPoint){
+        const ddx=bx-hoverLocalPoint.x, ddy=by-hoverLocalPoint.y, ddz=bz-hoverLocalPoint.z;
+        const d = Math.sqrt(ddx*ddx+ddy*ddy+ddz*ddz) || 0.001;
+        const R = 110;
+        if(d < R){
+          const force = (1-d/R)*52;
+          const tx=(ddx/d)*force, ty=(ddy/d)*force, tz=(ddz/d)*force;
+          s.disp.x += (tx-s.disp.x)*0.22; s.disp.y += (ty-s.disp.y)*0.22; s.disp.z += (tz-s.disp.z)*0.22;
+        } else { s.disp.multiplyScalar(0.9); }
+      } else { s.disp.multiplyScalar(0.9); }
+
+      posAttr.array[i*3]=bx+s.disp.x; posAttr.array[i*3+1]=by+s.disp.y; posAttr.array[i*3+2]=bz+s.disp.z;
+    }
+    posAttr.needsUpdate = true;
+
+    const tPos = threadGeo.attributes.position;
+    threadIndices.forEach((si,k)=>{
+      const n = neurons[starData[si].neuronIndex];
+      tPos.array[k*6]=n.pos.x; tPos.array[k*6+1]=n.pos.y; tPos.array[k*6+2]=n.pos.z;
+      tPos.array[k*6+3]=posAttr.array[si*3]; tPos.array[k*6+4]=posAttr.array[si*3+1]; tPos.array[k*6+5]=posAttr.array[si*3+2];
+    });
+    tPos.needsUpdate = true;
+
+    dust.rotation.y += dt*0.004;
+    renderer.render(scene, camera);
+  }
+  applyResize(); // frame correctly for this device before the first paint
+  camera.position.z = camTargetDist;
+  animate();
+
+} // end init()
+
+// the #neural-hitzone element lives inside .hero, further down in the
+// document than this <script> tag — wait for the DOM to finish parsing
+// before looking it up (and everything else init() sets up), rather than
+// running immediately and getting null back.
+if(document.readyState === 'loading'){
+  document.addEventListener('DOMContentLoaded', init);
+} else {
+  init();
+}
+
+})();
+</script>
+<header id="site-topnav" class="topnav"></header>
+
+<main>
+
+  <section class="hero container">
+    <div id="neural-hitzone" aria-hidden="true"></div>
+    <h1 class="mm-reveal-fade">Your Intelligent Assistant for<br><span class="grad-text mm-shimmer-text">Indian Standards &amp; BIS Services</span></h1>
+    <p class="lede mm-reveal-fade" style="animation-delay:.15s">Ask anything about BIS standards, services, certifications and get instant, accurate, AI-powered answers.</p>
+
+    <div class="glass-search-wrap">
+      <div class="glass-search" id="glass-search">
+        <div class="glass-search-inner">
+          <svg viewBox="0 0 24 24" class="icon"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+          <input id="glass-input" type="text" placeholder="Ask me anything about standards or BIS services…" autocomplete="off">
+          <button class="glass-mic" id="glass-mic-btn" aria-label="Voice search">
+            <svg viewBox="0 0 24 24" class="icon"><path d="M12 15a3 3 0 0 0 3-3V6a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3Z"/><path d="M19 11a7 7 0 0 1-14 0"/><path d="M12 18v3"/></svg>
+          </button>
+          <button class="glass-send" id="glass-send-btn" aria-label="Search">
+            <svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="m3 11 18-8-8 18-2-8-8-2Z"/></svg>
+          </button>
+        </div>
+        <div class="glass-answer" id="glass-answer">
+          <div class="glass-answer-inner" id="glass-answer-body"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="try-row">
+      Try asking
+      <div class="try-chips">
+        <span class="chip">What is IS 456?</span>
+        <span class="chip">How to get BIS certification?</span>
+        <span class="chip">ISI mark for electronics</span>
+        <span class="chip">BIS labs near me</span>
+      </div>
+    </div>
+
+    <div class="feature-grid">
+      <a class="card card-hover feature-tile" data-tilt href="standards.html">
+        <div class="fi"><svg viewBox="0 0 24 24" class="icon"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg></div>
+        <h3>Standards Search</h3>
+        <p>Find Indian Standards by keyword, number or category</p>
+      </a>
+      <a class="card card-hover feature-tile" data-tilt href="services.html">
+        <div class="fi"><svg viewBox="0 0 24 24" class="icon"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg></div>
+        <h3>BIS Services</h3>
+        <p>Explore BIS services like certification, training, testing etc.</p>
+      </a>
+      <a class="card card-hover feature-tile" data-tilt href="assistant.html">
+        <div class="fi"><svg viewBox="0 0 24 24" class="icon"><path d="M21 11.5a8.5 8.5 0 0 1-8.5 8.5 8.4 8.4 0 0 1-3.8-.9L3 20l1.05-3.9A8.4 8.4 0 0 1 3 11.5 8.5 8.5 0 0 1 11.5 3 8.5 8.5 0 0 1 21 11.5Z"/></svg></div>
+        <h3>AI Assistant</h3>
+        <p>Get instant answers to your standards and compliance queries</p>
+      </a>
+      <a class="card card-hover feature-tile" data-tilt href="resources.html">
+        <div class="fi"><svg viewBox="0 0 24 24" class="icon"><path d="M7 3h7l5 5v13a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1Z"/><path d="M14 3v5h5"/><path d="M9 13h6M9 17h6"/></svg></div>
+        <h3>Document Insights</h3>
+        <p>Upload documents and get AI-powered compliance summaries</p>
+      </a>
+    </div>
+  </section>
+
+  <section class="section container">
+    <div class="section-head">
+      <div>
+        <h2>Trusted by builders, engineers &amp; compliance teams</h2>
+        <p>A live snapshot of standards and services indexed by ManakMitra.</p>
+      </div>
+    </div>
+    <div class="stat-grid">
+      <div class="card stat-card" data-tilt>
+        <div class="si"><svg viewBox="0 0 24 24" class="icon"><path d="M7 3h7l5 5v13a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1Z"/><path d="M14 3v5h5"/></svg></div>
+        <div><div class="sv" data-count="12568" data-suffix="+">0</div><div class="sl">Indian Standards Available</div></div>
+      </div>
+      <div class="card stat-card" data-tilt>
+        <div class="si"><svg viewBox="0 0 24 24" class="icon"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg></div>
+        <div><div class="sv" data-count="48" data-suffix="+">0</div><div class="sl">Services &amp; Schemes</div></div>
+      </div>
+      <div class="card stat-card" data-tilt>
+        <div class="si"><svg viewBox="0 0 24 24" class="icon"><path d="M21 11.5a8.5 8.5 0 0 1-8.5 8.5 8.4 8.4 0 0 1-3.8-.9L3 20l1.05-3.9A8.4 8.4 0 0 1 3 11.5 8.5 8.5 0 0 1 11.5 3 8.5 8.5 0 0 1 21 11.5Z"/></svg></div>
+        <div><div class="sv" data-count="1248">0</div><div class="sl">AI Queries Answered</div></div>
+      </div>
+      <div class="card stat-card" data-tilt>
+        <div class="si"><svg viewBox="0 0 24 24" class="icon"><path d="M17 21v-2a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v2"/><circle cx="10" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></div>
+        <div><div class="sv" data-count="5246" data-suffix="+">0</div><div class="sl">Users Helped</div></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section container">
+    <div class="section-head">
+      <div>
+        <h2>Popular standards this week</h2>
+        <p>Frequently searched Indian Standards across construction, electrical and metallurgy.</p>
+      </div>
+      <a href="standards.html" class="btn btn-ghost btn-sm">View all standards →</a>
+    </div>
+    <div class="grid-3" id="popular-preview"></div>
+  </section>
+
+  <section class="section container">
+    <div class="card" data-tilt style="padding:36px; display:flex; align-items:center; justify-content:space-between; gap:24px; flex-wrap:wrap;">
+      <div style="max-width:520px;">
+        <h2 style="margin:0 0 10px; font-size:24px;">Need BIS Certification?</h2>
+        <p class="muted" style="margin:0 0 20px; font-size:14.5px; line-height:1.6;">Get your product certified with BIS and build trust in the Indian market — track every stage from application to ISI licence.</p>
+        <a href="certification.html" class="btn btn-primary">Explore Certification</a>
+      </div>
+      <div style="width:150px;height:150px;border-radius:24px;background:var(--grad-soft);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+        <svg viewBox="0 0 24 24" class="icon" style="width:64px;height:64px;color:var(--cyan);"><path d="M12 2 4 5v6c0 5 3.4 9 8 11 4.6-2 8-6 8-11V5l-8-3Z"/><path d="m9 12 2 2 4-4"/></svg>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<footer id="site-footer" class="site-footer"></footer>
+
+<script src="js/config.js"></script>
+<script src="../api/api.js"></script>
+<script src="js/nav.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="js/textfx.js"></script>
+<script src="js/auth.js"></script>
+<script src="js/assistant.js"></script>
+<script src="js/app.js"></script>
+<script>
+  (async () => {
+    // Loads STANDARDS for the "Popular standards" strip below, plus
+    // SERVICES/FAQS/CERT_STEPS so the glass search bar's answerQuery()
+    // has real data to match against.
+    const failed = await MM_DATA.load(["standards", "services", "faqs", "cert_steps"]);
+    if(failed.standards){
+      MM_DATA.showLoadError("popular-preview", "standards");
+      return;
+    }
+    document.getElementById("popular-preview").innerHTML = STANDARDS.slice(0,3).map(s => `
+      <div class="card card-hover result-card" data-tilt>
+        <div class="result-top">
+          <span class="result-number">${s.number}</span>
+          <span class="badge ${s.status==='Active'?'active':'superseded'}">${s.status}</span>
+        </div>
+        <p class="result-title">${s.title}</p>
+        <div class="result-meta"><span>${s.dept}</span><span>${s.language}</span></div>
+      </div>
+    `).join("");
+    initTiltCards();
+  })();
+
+</script>
+</body>
+</html>

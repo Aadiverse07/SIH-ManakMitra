@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Feedback &amp; Contact — ManakMitra</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<header id="site-topnav" class="topnav"></header>
+
+<div class="app-shell">
+  <aside id="site-sidebar" class="sidebar"></aside>
+
+  <main class="main">
+    <div class="page-head">
+      <div class="crumbtrail"><a href="index.html">Home</a> / <span>Feedback &amp; Contact</span></div>
+      <h1>Feedback &amp; Contact</h1>
+      <p class="muted">Share your opinion, report a problem, or get in touch with our team.</p>
+    </div>
+
+    <div class="card card--glass" data-tilt style="padding:26px; max-width:640px;">
+      <form id="feedback-form" style="display:flex; flex-direction:column; gap:14px;">
+        <div>
+          <label class="label">Your name (optional)</label>
+          <div class="field"><input id="fb-name" placeholder="Your name"></div>
+        </div>
+        <div>
+          <label class="label">Your email (optional, so we can reply)</label>
+          <div class="field"><input type="email" id="fb-email" placeholder="you@example.com"></div>
+        </div>
+        <div>
+          <label class="label">What's this about?</label>
+          <div class="field">
+            <select id="fb-category">
+              <option value="general">General feedback</option>
+              <option value="bug">Report a problem</option>
+              <option value="moderation_appeal">Question about a chat warning/block</option>
+              <option value="other">Other</option>
+            </select>
+          </div>
+        </div>
+        <div>
+          <label class="label">Message</label>
+          <div class="field"><textarea required id="fb-message" rows="6" placeholder="Tell us what's on your mind…" style="width:100%; background:transparent; border:0; outline:0; resize:vertical; font:inherit; color:inherit;"></textarea></div>
+        </div>
+        <div class="auth-error" id="fb-error"></div>
+        <button type="submit" class="btn btn-primary" id="fb-submit" style="align-self:flex-start;">Send message</button>
+      </form>
+    </div>
+  </main>
+</div>
+
+<script src="js/config.js"></script>
+<script src="../api/api.js"></script>
+<script src="js/nav.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="js/textfx.js"></script>
+<script src="js/auth.js"></script>
+<script>
+  document.addEventListener("DOMContentLoaded", () => {
+    renderSidebar("feedback.html");
+
+    document.getElementById("feedback-form").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const errorEl = document.getElementById("fb-error");
+      const submitBtn = document.getElementById("fb-submit");
+      const message = document.getElementById("fb-message").value.trim();
+      errorEl.textContent = "";
+      if (!message) { errorEl.textContent = "Please enter a message."; return; }
+
+      submitBtn.disabled = true;
+      submitBtn.textContent = "Sending…";
+      try {
+        const token = window.MM_AUTH ? await MM_AUTH.getAccessToken() : null;
+        const res = await fetch(`${MM_API_BASE}/feedback`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+          body: JSON.stringify({
+            name: document.getElementById("fb-name").value.trim() || null,
+            email: document.getElementById("fb-email").value.trim() || null,
+            category: document.getElementById("fb-category").value,
+            message,
+          }),
+        });
+        if (!res.ok) throw new Error(`Server responded ${res.status}`);
+        document.getElementById("feedback-form").reset();
+        if (typeof showToast === "function") showToast("Thanks — your message has been sent.");
+      } catch (err) {
+        errorEl.textContent = "Couldn't send your message right now. Please try again in a moment.";
+      } finally {
+        submitBtn.disabled = false;
+        submitBtn.textContent = "Send message";
+      }
+    });
+  });
+</script>
+</body>
+</html>

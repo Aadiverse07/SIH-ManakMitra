@@ -1,0 +1,14 @@
+{
+  "name": "manakmitra-data-migration",
+  "version": "1.0.0",
+  "private": true,
+  "description": "One-off script to migrate js/data.js into Supabase Postgres tables.",
+  "main": "migrate_data_js.js",
+  "scripts": {
+    "migrate": "node migrate_data_js.js"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.45.0",
+    "dotenv": "^16.4.5"
+  }
+}

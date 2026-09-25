@@ -1,0 +1,326 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Research Centre — ManakMitra</title>
+<link rel="stylesheet" href="css/style.css">
+<script src="https://cdn.jsdelivr.net/npm/marked@15.0.12/marked.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/dompurify@3.2.6/dist/purify.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.2/dist/jspdf.umd.min.js"></script>
+</head>
+<body>
+<header id="site-topnav" class="topnav"></header>
+<div class="app-shell">
+  <aside id="site-sidebar" class="sidebar"></aside>
+  <main class="main research-page">
+    <div class="page-head">
+      <div class="crumbtrail"><a href="index.html">Home</a> / <span>Research Centre</span></div>
+      <h1>Research Centre 🔬</h1>
+      <p class="muted">Multi-step, evidence-first BIS research. Research Centre is separate from Ask AI and will not fill missing evidence from general model knowledge.</p>
+    </div>
+
+    <div class="research-layout">
+      <section class="card research-query-card" data-tilt>
+        <div class="research-kicker research-kicker-lg">EVIDENCE-FIRST WORKFLOW</div>
+        <h2>Start a BIS research task</h2>
+        <p class="muted">Ask a question that needs standards, documents, versions, amendments, testing or compliance evidence.</p>
+        <label for="research-question" class="research-label">Research question</label>
+        <textarea id="research-question" class="research-textarea" maxlength="2000" placeholder="Example: Compare the requirements in IS 456:2000 and IS 800:2007 for structural design provisions relevant to this project."></textarea>
+        <div class="research-form-row">
+          <div style="flex:1; min-width:220px;">
+            <label for="research-type" class="research-label">Research type</label>
+            <select id="research-type" class="research-select">
+              <option value="">Auto-detect</option>
+              <option value="STANDARD_RESEARCH">Standard Research</option>
+              <option value="STANDARDS_COMPARISON">Standards Comparison</option>
+              <option value="PRODUCT_REQUIREMENT_RESEARCH">Product Requirement Research</option>
+              <option value="TESTING_RESEARCH">Testing Research</option>
+              <option value="CERTIFICATION_RESEARCH">Certification Research</option>
+              <option value="COMPLIANCE_RESEARCH">Compliance Research</option>
+              <option value="VERSION_RESEARCH">Version Research</option>
+              <option value="DOCUMENT_RESEARCH">Document Research</option>
+            </select>
+          </div>
+          <button id="run-research" class="btn btn-primary" type="button">Start Research</button>
+        </div>
+        <p class="faint" style="font-size:12px; margin:12px 0 0;">Important: retrieved evidence is shown with citations. Missing or conflicting evidence is reported as a limitation.</p>
+        <details class="research-advanced">
+          <summary>Advanced options <span class="research-advanced-hint">— fine-tune how this task runs</span></summary>
+          <div class="research-advanced-body">
+            <p class="muted" style="font-size:12.5px;">Not sure which <b>research type</b> to pick? <b>Standard Research</b> answers one question from BIS evidence. <b>Standards Comparison</b> contrasts two standards side-by-side. <b>Testing</b>, <b>Certification</b> and <b>Compliance Research</b> focus on those evidence categories specifically. <b>Version</b> and <b>Document Research</b> track revisions and source documents.</p>
+            <div class="research-form-row" style="margin-top:10px;">
+              <div style="flex:1; min-width:200px;">
+                <label for="research-compare-a" class="research-label">Compare: Standard A (optional)</label>
+                <input id="research-compare-a" class="research-select" placeholder="e.g. IS 456:2000" />
+              </div>
+              <div style="flex:1; min-width:200px;">
+                <label for="research-compare-b" class="research-label">Compare: Standard B (optional)</label>
+                <input id="research-compare-b" class="research-select" placeholder="e.g. IS 800:2007" />
+              </div>
+            </div>
+            <p class="faint" style="font-size:11.5px; margin:8px 0 0;">Fill in both to automatically run an evidence-backed Standards Comparison alongside your question.</p>
+          </div>
+        </details>
+      </section>
+
+      <aside class="card research-history-card" data-tilt>
+        <div class="research-history-head"><h3>Research History</h3><button id="refresh-history" class="btn btn-ghost btn-sm" type="button">Refresh</button></div>
+        <div id="research-history" class="research-history-list"><p class="muted">Sign in to view saved research.</p></div>
+      </aside>
+    </div>
+
+    <section id="research-progress" class="card research-progress" hidden>
+      <div class="research-progress-head"><div><div class="research-kicker">LIVE WORKFLOW</div><h3 id="progress-title">Preparing research…</h3></div><span id="progress-count" class="pill">0 / 9</span></div>
+      <div id="progress-steps" class="research-steps"></div>
+    </section>
+
+    <section id="research-result" class="research-result" hidden>
+      <div class="research-result-head card">
+        <div><div class="research-kicker">RESEARCH REPORT</div><h2 id="result-title">Research Report</h2><p id="result-meta" class="muted"></p></div>
+        <div class="research-actions"><button id="copy-citations" class="btn btn-ghost btn-sm" type="button">Copy Citations</button><button id="export-report" class="btn btn-primary btn-sm" type="button">Export PDF</button></div>
+      </div>
+      <div class="research-stat-grid">
+        <div class="card research-stat"><span>Confidence</span><b id="result-confidence">—</b></div>
+        <div class="card research-stat"><span>Evidence Records</span><b id="result-evidence-count">0</b></div>
+        <div class="card research-stat"><span>Citations</span><b id="result-citation-count">0</b></div>
+        <div class="card research-stat"><span>Research Type</span><b id="result-type">—</b></div>
+      </div>
+      <section id="comparison-result" class="card" hidden style="margin-bottom:16px;">
+        <div class="research-kicker">EVIDENCE-BACKED COMPARISON</div>
+        <h3>Structured Comparison</h3>
+        <div id="comparison-table-wrap" style="overflow:auto;"></div>
+        <div id="comparison-summary" style="margin-top:18px;"></div>
+      </section>
+      <div class="research-report-grid">
+        <article class="card research-report-card"><div id="report-markdown" class="research-markdown"></div></article>
+        <aside class="card research-evidence-card">
+          <h3>Evidence &amp; Citations</h3>
+          <div id="citation-list"></div>
+          <h3 style="margin-top:20px;">Version Information</h3>
+          <div id="version-list"></div>
+          <h3 style="margin-top:20px;">Amendments</h3>
+          <div id="amendment-list"></div>
+        </aside>
+      </div>
+    </section>
+  </main>
+</div>
+
+<script src="js/config.js"></script>
+<script src="../api/api.js"></script>
+<script src="js/nav.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="js/textfx.js"></script>
+<script src="js/auth.js"></script>
+<script src="js/app.js"></script>
+<script>
+const STEPS = [
+  "Understanding question","Finding relevant standards","Finding documents","Checking versions","Checking amendments","Collecting evidence","Comparing sources","Generating report","Validating citations"
+];
+let lastResearch = null;
+function esc(v){ return typeof escapeHtml === "function" ? escapeHtml(String(v ?? "")) : String(v ?? "").replace(/[&<>\"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;"}[c])); }
+function setProgress(active){
+  const box=document.getElementById("research-progress"); box.hidden=false;
+  document.getElementById("progress-steps").innerHTML=STEPS.map((s,i)=>`<div class="research-step ${i<active?'done':i===active?'active':''}"><span>${i<active?'✓':i+1}</span><label>${s}</label></div>`).join("");
+  document.getElementById("progress-count").textContent=`${Math.min(active+1,STEPS.length)} / ${STEPS.length}`;
+  document.getElementById("progress-title").textContent=STEPS[Math.min(active,STEPS.length-1)];
+}
+function renderHistory(items){
+  const el=document.getElementById("research-history");
+  if(!items?.length){el.innerHTML='<p class="muted">No saved research yet.</p>';return;}
+  el.innerHTML=items.map(x=>`<button class="research-history-item" data-id="${esc(x.id)}"><strong>${esc(x.title)}</strong><span>${esc(x.research_type)} · ${esc(x.confidence)} · ${new Date(x.created_at).toLocaleString()}</span></button>`).join("");
+  el.querySelectorAll("[data-id]").forEach(b=>b.addEventListener("click",async()=>{try{const row=await MM_DATA.getResearch(b.dataset.id);const data=row.payload||row;showResult(data);}catch(e){showToast(e.message);}}));
+}
+async function loadHistory(){try{renderHistory(await MM_DATA.listResearch());}catch(e){renderHistory([]);}}
+function citationText(c){
+  const bits=[c.standard_number||c.standard_title||"BIS evidence",c.standard_title&&c.standard_title!==c.standard_number?c.standard_title:null,c.clause?`Clause ${c.clause}`:null,c.page?`Page ${c.page}`:null,c.version||c.document_version?`Version ${c.version||c.document_version}`:null,c.amendment_label?`Amendment ${c.amendment_label}`:null,c.source_authority||null].filter(Boolean);
+  return `[${c.citation_id}] ${bits.join(" — ")}`;
+}
+function renderComparison(c){
+  const box=document.getElementById("comparison-result");
+  if(!c){box.hidden=true;return;}
+  box.hidden=false;
+  const a=esc(c.targets?.[0]||"Standard A"), b=esc(c.targets?.[1]||"Standard B");
+  const rows=(c.categories||[]).map(row=>{
+    const cell=x=>x?.status==="evidence_found" ? (x.statements||[]).map((t,i)=>`${esc(t)}${x.evidence?.[i]?` <small>[${esc(x.evidence[i])}]</small>`:""}`).join("<br>") : '<span class="muted">Insufficient evidence</span>';
+    return `<tr><th>${esc(row.category)}</th><td>${cell(row.standard_a)}</td><td>${cell(row.standard_b)}</td></tr>`;
+  }).join("");
+  document.getElementById("comparison-table-wrap").innerHTML=`<table><thead><tr><th>Category</th><th>${a}</th><th>${b}</th></tr></thead><tbody>${rows}</tbody></table>`;
+  const li=(items,mapFn)=>(items||[]).map(mapFn).join("")||'<li class="muted">None established from the retrieved evidence.</li>';
+  const diff=li(c.differences,x=>`<li><b>${esc(x.category)}:</b> evidence differs between the two sources.</li>`);
+  const common=li(c.common_requirements,x=>`<li>${esc(x.category)} — common evidence found.</li>`);
+  const unique=li(c.unique_requirements,x=>`<li>${esc(x.category)} — evidence found only for ${esc(x.standard)}.</li>`);
+  const testingDiff=li(c.testing_differences,x=>`<li><b>${esc(x.category)}:</b> evidence differs between the two sources.</li>`);
+  const versionDiff=li(c.version_differences,x=>`<li><b>${esc(x.category)}:</b> evidence differs between the two sources.</li>`);
+  const evidenceList=li(c.evidence,e=>`<li><b>[${esc(e.citation_id)}]</b> ${esc(e.standard_number||"Unknown standard")}${e.clause?`, clause ${esc(e.clause)}`:""} — ${esc((e.evidence_text||"").slice(0,180))}${(e.evidence_text||"").length>180?"…":""}</li>`);
+  document.getElementById("comparison-summary").innerHTML=`<h4>Common Requirements</h4><ul>${common}</ul><h4>Differences</h4><ul>${diff}</ul><h4>Unique Requirements</h4><ul>${unique}</ul><h4>Testing Differences</h4><ul>${testingDiff}</ul><h4>Version Differences</h4><ul>${versionDiff}</ul><h4>Evidence</h4><ul>${evidenceList}</ul>`;
+}
+function showResult(r){
+  lastResearch=r; document.getElementById("research-result").hidden=false;
+  document.getElementById("result-title").textContent=r.question||"Research Report";
+  document.getElementById("result-meta").textContent=`${r.created_at?new Date(r.created_at).toLocaleString():""} · Evidence-first BIS research`;
+  document.getElementById("result-confidence").textContent=r.confidence||"insufficient";
+  document.getElementById("result-evidence-count").textContent=(r.evidence||[]).length;
+  document.getElementById("result-citation-count").textContent=(r.citations||[]).length;
+  document.getElementById("result-type").textContent=r.research_type||"STANDARD_RESEARCH";
+  renderComparison(r.comparison);
+  const md=typeof marked!="undefined"?marked.parse(r.report||""):esc(r.report||"").replace(/\n/g,"<br>");
+  document.getElementById("report-markdown").innerHTML=(window.DOMPurify ? DOMPurify.sanitize(md) : md);
+  if(window.mmHighlightKeywords) mmHighlightKeywords(document.getElementById("report-markdown"));
+  document.getElementById("citation-list").innerHTML=(r.citations||[]).map(c=>`<div class="research-citation"><b>${esc(c.citation_id)}</b><div>${esc(citationText(c))}</div>${c.evidence_text?`<p>${esc(c.evidence_text.slice(0,420))}${c.evidence_text.length>420?'…':''}</p>`:''}</div>`).join("")||'<p class="muted">No citations were produced.</p>';
+  document.getElementById("version-list").innerHTML=(r.version_information||[]).map(v=>`<div class="research-mini-row"><b>${esc(v.version_label||"Unknown version")}</b><span>${esc(v.version_kind||"unknown")} · ${v.current_verified===true?'Current verified':'Current not verified'}</span></div>`).join("")||'<p class="muted">No source-backed version records found.</p>';
+  document.getElementById("amendment-list").innerHTML=(r.amendments||[]).map(a=>`<div class="research-mini-row"><b>${esc(a.amendment_label||"Amendment")}</b><span>${esc(a.source||"Source not recorded")}</span></div>`).join("")||'<p class="muted">No source-backed amendments found.</p>';
+  document.getElementById("research-result").scrollIntoView({behavior:"smooth",block:"start"});
+}
+async function startResearch(){
+  let q=document.getElementById("research-question").value.trim();
+  let type=document.getElementById("research-type").value||null;
+  const compareA=document.getElementById("research-compare-a")?.value.trim();
+  const compareB=document.getElementById("research-compare-b")?.value.trim();
+  if(compareA && compareB){
+    type="STANDARDS_COMPARISON";
+    q = q ? `Compare ${compareA} and ${compareB}: ${q}` : `Compare the requirements in ${compareA} and ${compareB}.`;
+  }
+  if(q.length<3){showToast("Enter a research question first.");return;}
+  const btn=document.getElementById("run-research"); btn.disabled=true; document.getElementById("research-result").hidden=true; setProgress(0);
+  // The backend executes these stages sequentially. The UI advances through the
+  // same named stages while the request is running; the final response is the
+  // authoritative completed workflow returned by the server.
+  let i=1; const timer=setInterval(()=>{ if(i<8) setProgress(i++); },700);
+  try{
+    const result=await MM_DATA.runResearch({question:q,research_type:type,save:true});
+    clearInterval(timer); setProgress(STEPS.length-1); showResult(result); await loadHistory();
+  }catch(e){clearInterval(timer); showToast(e.message||"Research failed."); document.getElementById("research-progress").hidden=true;}
+  finally{btn.disabled=false;}
+}
+function markdownToPdfBlocks(md){
+  const lines = String(md||"").split(/\r?\n/);
+  const blocks=[]; let para=[];
+  const flushPara=()=>{ if(para.length){ blocks.push({type:"p", text:para.join(" ")}); para=[]; } };
+  lines.forEach(raw=>{
+    const line = raw.trim();
+    if(!line){ flushPara(); return; }
+    const h = line.match(/^(#{1,3})\s+(.*)$/);
+    if(h){ flushPara(); blocks.push({type:"h"+h[1].length, text:h[2]}); return; }
+    const li = line.match(/^[-*]\s+(.*)$/) || line.match(/^\d+\.\s+(.*)$/);
+    if(li){ flushPara(); blocks.push({type:"li", text:li[1]}); return; }
+    para.push(line);
+  });
+  flushPara();
+  return blocks;
+}
+// Word-wraps a line honoring **bold** markdown segments, drawing each word at the
+// correct weight, and advances to a new page when it would overflow the current one.
+function renderStyledParagraph(doc, text, x, y, maxWidth, lineHeight, ctx){
+  const segments=[]; const re=/\*\*(.+?)\*\*/g; let last=0, m;
+  while((m=re.exec(text))){
+    if(m.index>last) segments.push({text:text.slice(last,m.index), bold:false});
+    segments.push({text:m[1], bold:true});
+    last=m.index+m[0].length;
+  }
+  if(last<text.length) segments.push({text:text.slice(last), bold:false});
+  const words=[];
+  segments.forEach(seg=>{ seg.text.split(/(\s+)/).forEach(w=>{ if(w!=="") words.push({text:w, bold:seg.bold}); }); });
+  let cx=x, lineWords=[];
+  const flushLine=()=>{
+    if(!lineWords.length) return;
+    if(y>ctx.pageBottom){ doc.addPage(); if(ctx.onNewPage) ctx.onNewPage(); y=ctx.marginTop; }
+    let lx=x;
+    lineWords.forEach(w=>{ doc.setFont(undefined, w.bold?"bold":"normal"); doc.text(w.text, lx, y); lx+=doc.getTextWidth(w.text); });
+    y+=lineHeight; lineWords=[]; cx=x;
+  };
+  words.forEach(w=>{
+    doc.setFont(undefined, w.bold?"bold":"normal");
+    const wWidth=doc.getTextWidth(w.text);
+    if(cx+wWidth>x+maxWidth && lineWords.length) flushLine();
+    lineWords.push(w); cx+=wWidth;
+  });
+  flushLine();
+  doc.setFont(undefined,"normal");
+  return y;
+}
+function exportResearchPdf(r){
+  if(!window.jspdf){ showToast("PDF library failed to load."); return; }
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ unit:"pt", format:"a4" });
+  const marginX=48, marginTop=56, pageBottom=760, pageWidth=595.28, maxWidth=pageWidth-marginX*2;
+  let y=marginTop;
+  const ctx={ pageBottom, marginTop, onNewPage:()=>{ doc.setFontSize(10.5); doc.setFont(undefined,"normal"); doc.setTextColor(30); } };
+
+  doc.setFont(undefined,"bold"); doc.setFontSize(18); doc.setTextColor(20);
+  doc.splitTextToSize(r.question||"Research Report", maxWidth).forEach(l=>{ doc.text(l, marginX, y); y+=22; });
+  y+=2;
+  doc.setFont(undefined,"normal"); doc.setFontSize(10); doc.setTextColor(100);
+  doc.text(`${r.created_at?new Date(r.created_at).toLocaleString():""}  ·  Evidence-first BIS research  ·  Type: ${r.research_type||"STANDARD_RESEARCH"}`, marginX, y);
+  y+=26;
+
+  const stats=[["Confidence",r.confidence||"insufficient"],["Evidence Records",(r.evidence||[]).length],["Citations",(r.citations||[]).length]];
+  const boxW=maxWidth/stats.length;
+  stats.forEach((s,i)=>{
+    const bx=marginX+i*boxW;
+    doc.setDrawColor(205); doc.roundedRect(bx, y, boxW-8, 42, 4, 4);
+    doc.setFont(undefined,"bold"); doc.setFontSize(12); doc.setTextColor(20); doc.text(String(s[1]), bx+10, y+19);
+    doc.setFont(undefined,"normal"); doc.setFontSize(8); doc.setTextColor(120); doc.text(String(s[0]), bx+10, y+32);
+  });
+  y+=58;
+  doc.setDrawColor(220); doc.line(marginX, y, marginX+maxWidth, y); y+=22;
+
+  doc.setTextColor(20); doc.setFont(undefined,"bold"); doc.setFontSize(13); doc.text("Research Report", marginX, y); y+=18;
+  doc.setFont(undefined,"normal"); doc.setFontSize(10.5); doc.setTextColor(30);
+  markdownToPdfBlocks(r.report||"").forEach(b=>{
+    if(y>ctx.pageBottom){ doc.addPage(); ctx.onNewPage(); y=ctx.marginTop; }
+    if(b.type==="h1"||b.type==="h2"||b.type==="h3"){
+      const size=b.type==="h1"?13:b.type==="h2"?12:11;
+      y+=6; doc.setFont(undefined,"bold"); doc.setFontSize(size); doc.setTextColor(20);
+      doc.splitTextToSize(b.text,maxWidth).forEach(l=>{ if(y>ctx.pageBottom){doc.addPage();ctx.onNewPage();y=ctx.marginTop;} doc.text(l,marginX,y); y+=size+3; });
+      doc.setFont(undefined,"normal"); doc.setFontSize(10.5); doc.setTextColor(30); y+=2;
+    }else if(b.type==="li"){
+      y=renderStyledParagraph(doc, "•  "+b.text, marginX+4, y, maxWidth-4, 14, ctx); y+=1;
+    }else{
+      y=renderStyledParagraph(doc, b.text, marginX, y, maxWidth, 14, ctx); y+=5;
+    }
+  });
+
+  const citations=r.citations||[];
+  if(y>ctx.pageBottom-60){ doc.addPage(); y=ctx.marginTop; } else { y+=10; }
+  doc.setFont(undefined,"bold"); doc.setFontSize(13); doc.setTextColor(20); doc.text("Citation Register", marginX, y); y+=18;
+  doc.setFont(undefined,"normal"); doc.setFontSize(10); doc.setTextColor(30);
+  if(!citations.length){ doc.setTextColor(120); doc.text("No citations were produced.", marginX, y); y+=16; doc.setTextColor(30); }
+  citations.forEach((c,idx)=>{ y=renderStyledParagraph(doc, `${idx+1}. ${citationText(c)}`, marginX, y, maxWidth, 13, ctx); y+=3; });
+
+  const versions=r.version_information||[];
+  if(versions.length){
+    if(y>ctx.pageBottom-60){ doc.addPage(); y=ctx.marginTop; } else { y+=10; }
+    doc.setFont(undefined,"bold"); doc.setFontSize(13); doc.setTextColor(20); doc.text("Version Information", marginX, y); y+=18;
+    doc.setFont(undefined,"normal"); doc.setFontSize(10); doc.setTextColor(30);
+    versions.forEach(v=>{ y=renderStyledParagraph(doc, `• ${v.version_label||"Unknown version"} — ${v.version_kind||"unknown"} (${v.current_verified===true?"current verified":"current not verified"})`, marginX, y, maxWidth, 13, ctx); y+=3; });
+  }
+  const amendments=r.amendments||[];
+  if(amendments.length){
+    if(y>ctx.pageBottom-60){ doc.addPage(); y=ctx.marginTop; } else { y+=10; }
+    doc.setFont(undefined,"bold"); doc.setFontSize(13); doc.setTextColor(20); doc.text("Amendments", marginX, y); y+=18;
+    doc.setFont(undefined,"normal"); doc.setFontSize(10); doc.setTextColor(30);
+    amendments.forEach(a=>{ y=renderStyledParagraph(doc, `• ${a.amendment_label||"Amendment"} — ${a.source||"Source not recorded"}`, marginX, y, maxWidth, 13, ctx); y+=3; });
+  }
+
+  const pageCount=doc.internal.getNumberOfPages();
+  for(let i=1;i<=pageCount;i++){
+    doc.setPage(i); doc.setFont(undefined,"normal"); doc.setFontSize(8); doc.setTextColor(140);
+    doc.text("ManakMitra — Evidence-first BIS Research", marginX, 812);
+    doc.text(`Page ${i} of ${pageCount}`, pageWidth-marginX-70, 812);
+  }
+  doc.save(`manakmitra-research-${Date.now()}.pdf`);
+}
+document.addEventListener("DOMContentLoaded",async()=>{
+  renderSidebar("research.html");
+  document.getElementById("run-research").addEventListener("click",startResearch);
+  document.getElementById("refresh-history").addEventListener("click",loadHistory);
+  document.getElementById("research-question").addEventListener("keydown",e=>{if((e.ctrlKey||e.metaKey)&&e.key==="Enter")startResearch();});
+  document.getElementById("copy-citations").addEventListener("click",async()=>{if(!lastResearch)return;const text=(lastResearch.citations||[]).map(c=>citationText(c)).join("\n");try{await navigator.clipboard.writeText(text);showToast("Citations copied");}catch(_){showToast("Could not copy citations");}});
+  document.getElementById("export-report").addEventListener("click",()=>{if(!lastResearch)return;try{exportResearchPdf(lastResearch);}catch(e){showToast("Could not generate PDF.");}});
+  await loadHistory();
+});
+</script>
+</body>
+</html>

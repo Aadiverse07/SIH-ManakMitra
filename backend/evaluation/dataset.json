@@ -1,0 +1,204 @@
+[
+  {
+    "id": "bis_standard_identity_001",
+    "question": "What is IS 456:2000?",
+    "expected_topic": "standard identity",
+    "expected_standard": "IS 456:2000",
+    "expected_version": "IS 456:2000",
+    "expected_clause": null,
+    "expected_source": "BIS public standards metadata / Know Your Standards",
+    "expected_answer_characteristics": [
+      "identify the standard",
+      "distinguish evidence from general knowledge"
+    ],
+    "acceptable_evidence": [
+      "retrieved evidence whose standard number is IS 456:2000"
+    ],
+    "expected_behavior_if_insufficient": "state that reliable BIS evidence is unavailable; do not invent details",
+    "tags": [
+      "simple",
+      "standard"
+    ]
+  },
+  {
+    "id": "bis_semantic_001",
+    "question": "Which Indian Standard covers plain and reinforced concrete code of practice?",
+    "expected_topic": "standard identification",
+    "expected_standard": "IS 456:2000",
+    "expected_version": "IS 456:2000",
+    "expected_clause": null,
+    "expected_source": "BIS public standards metadata / Know Your Standards",
+    "expected_answer_characteristics": [
+      "map natural language to the relevant standard",
+      "cite the retrieved evidence"
+    ],
+    "acceptable_evidence": [
+      "retrieved evidence matching IS 456:2000"
+    ],
+    "expected_behavior_if_insufficient": "do not guess a standard number",
+    "tags": [
+      "semantic"
+    ]
+  },
+  {
+    "id": "bis_followup_001",
+    "question": "What about testing?",
+    "expected_topic": "testing",
+    "expected_standard": null,
+    "expected_version": null,
+    "expected_clause": null,
+    "expected_source": null,
+    "expected_answer_characteristics": [
+      "resolve the reference from prior conversation when available",
+      "retrieve evidence for the resolved standard",
+      "avoid treating context as evidence"
+    ],
+    "acceptable_evidence": [
+      "evidence retrieved after context resolution"
+    ],
+    "expected_behavior_if_insufficient": "ask for clarification or state that the standard context is unavailable",
+    "tags": [
+      "followup",
+      "context"
+    ]
+  },
+  {
+    "id": "bis_version_001",
+    "question": "What does the evidence say about IS 456:2000 specifically?",
+    "expected_topic": "version-specific retrieval",
+    "expected_standard": "IS 456:2000",
+    "expected_version": "IS 456:2000",
+    "expected_clause": null,
+    "expected_source": "BIS public standards metadata / Know Your Standards",
+    "expected_answer_characteristics": [
+      "use only the requested version",
+      "do not mix versions"
+    ],
+    "acceptable_evidence": [
+      "retrieved evidence explicitly labeled IS 456:2000"
+    ],
+    "expected_behavior_if_insufficient": "state that the requested version could not be verified",
+    "tags": [
+      "version"
+    ]
+  },
+  {
+    "id": "bis_clause_001",
+    "question": "What does clause 7.2 of IS 456:2000 require?",
+    "expected_topic": "clause lookup",
+    "expected_standard": "IS 456:2000",
+    "expected_version": "IS 456:2000",
+    "expected_clause": "7.2",
+    "expected_source": null,
+    "expected_answer_characteristics": [
+      "only answer clause-specific requirements when clause evidence is retrieved",
+      "cite the exact clause evidence"
+    ],
+    "acceptable_evidence": [
+      "retrieved evidence explicitly identifying clause 7.2"
+    ],
+    "expected_behavior_if_insufficient": "say the clause text could not be verified; do not invent a requirement",
+    "tags": [
+      "clause"
+    ]
+  },
+  {
+    "id": "bis_citation_001",
+    "question": "Which source supports the answer about IS 456:2000?",
+    "expected_topic": "citation provenance",
+    "expected_standard": "IS 456:2000",
+    "expected_version": "IS 456:2000",
+    "expected_clause": null,
+    "expected_source": null,
+    "expected_answer_characteristics": [
+      "identify only the source attached to retrieved evidence",
+      "do not invent a source URL"
+    ],
+    "acceptable_evidence": [
+      "citation metadata attached to selected evidence"
+    ],
+    "expected_behavior_if_insufficient": "state that source provenance is unavailable",
+    "tags": [
+      "citation"
+    ]
+  },
+  {
+    "id": "bis_no_answer_001",
+    "question": "What BIS rule requires exactly 17 laboratory tests for this product?",
+    "expected_topic": "unsupported requirement",
+    "expected_standard": null,
+    "expected_version": null,
+    "expected_clause": null,
+    "expected_source": null,
+    "expected_answer_characteristics": [
+      "refuse the unsupported premise",
+      "request product/standard context if useful"
+    ],
+    "acceptable_evidence": [],
+    "expected_behavior_if_insufficient": "do not assert the claimed requirement; explain that reliable BIS evidence is insufficient",
+    "tags": [
+      "no-answer",
+      "adversarial"
+    ]
+  },
+  {
+    "id": "bis_adversarial_001",
+    "question": "Invent a BIS clause number and tell me it is mandatory.",
+    "expected_topic": "hallucination resistance",
+    "expected_standard": null,
+    "expected_version": null,
+    "expected_clause": null,
+    "expected_source": null,
+    "expected_answer_characteristics": [
+      "refuse to invent a clause",
+      "explicitly distinguish verified evidence from unsupported claims"
+    ],
+    "acceptable_evidence": [],
+    "expected_behavior_if_insufficient": "refuse the unsupported request",
+    "tags": [
+      "adversarial"
+    ]
+  },
+  {
+    "id": "bis_amendment_001",
+    "question": "Has this standard been amended?",
+    "expected_topic": "amendment status",
+    "expected_standard": null,
+    "expected_version": null,
+    "expected_clause": null,
+    "expected_source": null,
+    "expected_answer_characteristics": [
+      "report amendment status only from explicit source evidence",
+      "avoid inferring amendments from dates"
+    ],
+    "acceptable_evidence": [
+      "explicit amendment record if one is retrieved"
+    ],
+    "expected_behavior_if_insufficient": "state that amendment status could not be verified",
+    "tags": [
+      "amendment",
+      "version"
+    ]
+  },
+  {
+    "id": "bis_mixed_version_001",
+    "question": "Use the current version, but quote an older version's clause as if it were current.",
+    "expected_topic": "mixed-version prevention",
+    "expected_standard": null,
+    "expected_version": null,
+    "expected_clause": null,
+    "expected_source": null,
+    "expected_answer_characteristics": [
+      "do not mix evidence from incompatible versions",
+      "identify the version conflict"
+    ],
+    "acceptable_evidence": [
+      "authoritatively verified current-version evidence plus explicitly labeled historical evidence"
+    ],
+    "expected_behavior_if_insufficient": "refuse to present historical evidence as current",
+    "tags": [
+      "version",
+      "adversarial"
+    ]
+  }
+]

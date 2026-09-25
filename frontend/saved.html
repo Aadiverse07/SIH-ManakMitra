@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Saved — ManakMitra</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<header id="site-topnav" class="topnav"></header>
+
+<div class="app-shell">
+  <aside id="site-sidebar" class="sidebar"></aside>
+
+  <main class="main">
+    <div class="page-head">
+      <div class="crumbtrail"><a href="index.html">Home</a> / <span>Saved</span></div>
+      <h1>Saved Standards</h1>
+      <p class="muted">Standards you've bookmarked for quick access.</p>
+    </div>
+
+    <div class="grid-3" id="saved-grid"></div>
+  </main>
+</div>
+
+<script src="js/local-data.js"></script>
+<script src="js/config.js"></script>
+<script src="../api/api.js"></script>
+<script src="js/nav.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="js/textfx.js"></script>
+<script src="js/auth.js"></script>
+<script src="js/app.js"></script>
+<script>
+  function escapeHtmlLocal(value){
+    return String(value ?? "").replace(/[&<>"']/g, c => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" }[c]));
+  }
+
+  document.addEventListener("DOMContentLoaded", async () => {
+    renderSidebar("saved.html");
+
+    const failed = await MM_DATA.load(["standards"]);
+    if(failed.standards){
+      MM_DATA.showLoadError("saved-grid", "saved standards");
+      return;
+    }
+
+    const grid = document.getElementById("saved-grid");
+
+    function renderSaved(){
+      const savedNumbers = new Set(MM_DATA.getSavedStandards());
+      const list = STANDARDS.filter(s => savedNumbers.has(String(s.number)));
+
+      grid.innerHTML = list.length ? list.map(s => `
+        <div class="card result-card saved-standard-card">
+          <div class="result-top">
+            <span class="result-number">${escapeHtmlLocal(s.number)}</span>
+            <button type="button" class="btn btn-ghost btn-sm unsave-btn" data-number="${escapeHtmlLocal(s.number)}" aria-label="Remove ${escapeHtmlLocal(s.number)} from Saved">Remove</button>
+          </div>
+          <p class="result-title">${escapeHtmlLocal(s.title)}</p>
+          <div class="result-meta"><span>${escapeHtmlLocal(s.dept || "—")}</span><span>${escapeHtmlLocal(s.status || "—")}</span></div>
+          <div style="margin-top:12px;">
+            <a class="btn btn-ghost btn-sm" href="standards.html?q=${encodeURIComponent(s.number)}">Open standard</a>
+            <button type="button" class="btn btn-primary btn-sm saved-download-btn" data-number="${escapeHtmlLocal(s.number)}">Download PDF</button>
+          </div>
+        </div>
+      `).join("") : `
+        <div class="card" style="padding:30px; text-align:center; grid-column:1/-1;">
+          <p style="margin:0 0 6px; font-weight:600;">No saved standards yet.</p>
+          <p class="muted" style="margin:0;">Open Standards, choose a standard, and click Save.</p>
+        </div>`;
+
+      grid.querySelectorAll(".unsave-btn").forEach(btn => {
+        btn.addEventListener("click", () => {
+          MM_DATA.removeStandard(btn.dataset.number);
+          renderSaved();
+          showToast(`${btn.dataset.number} removed from Saved`);
+        });
+      });
+      grid.querySelectorAll(".saved-download-btn").forEach(btn => {
+        const standard = STANDARDS.find(s => String(s.number) === String(btn.dataset.number));
+        btn.addEventListener("click", () => MM_DATA.downloadStandardPdf(standard));
+      });
+    }
+
+    renderSaved();
+    window.addEventListener("mm:saved-changed", renderSaved);
+    window.addEventListener("storage", e => { if(e.key === "mm-saved-standards") renderSaved(); });
+  });
+</script>
+</body>
+</html>

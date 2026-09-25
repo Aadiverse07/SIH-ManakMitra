@@ -1,0 +1,203 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Standards Search — ManakMitra</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<header id="site-topnav" class="topnav"></header>
+
+<div class="app-shell">
+  <aside id="site-sidebar" class="sidebar"></aside>
+
+  <main class="main">
+    <div class="page-head">
+      <div class="crumbtrail"><a href="index.html">Home</a> / <span>Standards</span></div>
+      <h1>Standards Search</h1>
+      <p class="muted">Search and explore Indian Standards by keyword, number or category.</p>
+    </div>
+
+    <div class="field" style="margin-bottom:14px; max-width:520px;">
+      <svg viewBox="0 0 24 24" class="icon"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+      <input id="std-search" type="text" placeholder="Search by IS number, title or keyword…" autocomplete="off">
+      <button class="btn btn-ghost btn-sm" id="clear-search">Clear</button>
+    </div>
+
+    <div class="tag-scroll" id="cat-pills" style="margin-bottom:20px;"></div>
+
+    <p class="faint" id="results-count" style="margin:0 0 14px;"></p>
+
+    <div class="grid-2" id="results-grid" style="align-items:start; grid-template-columns: 1.3fr .9fr;">
+      <div id="results-list"></div>
+      <div class="card" id="detail-panel" style="padding:24px; position:sticky; top:calc(var(--topbar-h) + 16px);"></div>
+    </div>
+  </main>
+</div>
+
+<script src="js/local-data.js"></script>
+<script src="js/config.js"></script>
+<script src="../api/api.js"></script>
+<script src="js/nav.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="js/textfx.js"></script>
+<script src="js/auth.js"></script>
+<script src="js/app.js"></script>
+<script>
+  function escapeHtml(s){
+    return String(s).replace(/[&<>"']/g, c => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" }[c]));
+  }
+
+  let activeCat = "all";
+  let activeQuery = "";
+  let selected = null;
+  let searchTimer = null;
+
+  function categoryLabel(id){
+    if(id === "all") return "All Categories";
+    const c = CATEGORIES.find(c => c.id === id);
+    return c ? c.label : id;
+  }
+
+  function renderPills(){
+    const all = [{ id: "all", label: "All Categories" }, ...CATEGORIES.map(c => ({ id: c.id, label: c.label }))];
+    document.getElementById("cat-pills").innerHTML = all.map(c => `<button class="cat-pill ${activeCat===c.id?'is-active':''}" data-cat="${c.id}">${c.label}</button>`).join("");
+    document.querySelectorAll(".cat-pill").forEach(btn => {
+      btn.addEventListener("click", () => {
+        activeCat = btn.dataset.cat;
+        runSearch();
+      });
+    });
+  }
+
+  function selectStandard(number){
+    selected = STANDARDS.find(s => s.number === number) || null;
+    renderDetail();
+    document.querySelectorAll(".result-card").forEach(c => c.classList.toggle("is-selected", c.dataset.number === number));
+  }
+
+  function renderDetail(){
+    const panel = document.getElementById("detail-panel");
+    if(!selected){ panel.innerHTML = `<p class="muted" style="font-size:13.5px;">Select a standard to view full details.</p>`; return; }
+    const s = selected;
+    panel.innerHTML = `
+      <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:10px;">
+        <h2 style="font-size:19px; margin:0;">${s.number}</h2>
+        <span class="badge ${s.status==='Active'?'active':'superseded'}">${s.status}</span>
+      </div>
+      <p class="muted" style="font-size:14px; line-height:1.6; margin:0 0 16px;">${s.title}</p>
+      <p style="font-size:13.5px; line-height:1.65; color:var(--text-dim); margin:0 0 18px;">${s.desc || "No description available."}</p>
+      <div class="divider"></div>
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; font-size:12.8px; margin-bottom:20px;">
+        <div><span class="faint">Technical Dept.</span><br><b>${s.dept || "—"}</b></div>
+        <div><span class="faint">Language</span><br><b>${s.language || "—"}</b></div>
+        <div><span class="faint">Category</span><br><b>${categoryLabel(s.category)}</b></div>
+        <div><span class="faint">Relevance</span><br><b>${s.relevance_score ?? "—"}</b></div>
+      </div>
+      ${s.source_url ? `<a href="${s.source_url}" target="_blank" rel="noopener" class="btn btn-ghost btn-sm">View source</a>` : ""}
+      <div style="display:flex; gap:10px; flex-wrap:wrap; margin-top:10px;">
+        <button class="btn btn-primary btn-sm" id="download-standard-btn" type="button">Download PDF</button>
+        <button class="btn btn-ghost btn-sm" id="save-standard-btn" type="button">${MM_DATA.isStandardSaved(s.number) ? "Saved ✓" : "Save"}</button>
+        <button class="btn btn-ghost btn-sm" id="graph-standard-btn" type="button">View relationships</button>
+        <a href="assistant.html" class="btn btn-ghost btn-sm">Ask AI about this</a>
+      </div>
+      <div id="graph-panel" style="margin-top:16px;"></div>
+    `;
+    document.getElementById("download-standard-btn")?.addEventListener("click", () => MM_DATA.downloadStandardPdf(s));
+    document.getElementById("save-standard-btn")?.addEventListener("click", () => {
+      const saved = MM_DATA.toggleStandardSaved(s);
+      const btn = document.getElementById("save-standard-btn");
+      if(btn) btn.textContent = saved ? "Saved ✓" : "Save";
+    });
+    document.getElementById("graph-standard-btn")?.addEventListener("click", async () => {
+      const panel = document.getElementById("graph-panel");
+      if(!panel) return;
+      panel.innerHTML = `<div class="divider"></div><p class="faint">Loading verified relationships…</p>`;
+      try {
+        const graph = await MM_DATA.getStandardGraph(s.number);
+        const nodes = new Map((graph.nodes || []).map(n => [n.id, n]));
+        const items = (graph.edges || []).map(e => {
+          const from = nodes.get(e.from_node_id);
+          const to = nodes.get(e.to_node_id);
+          return `<div style="padding:9px 0; border-bottom:1px solid var(--line); font-size:12.5px; line-height:1.5;">
+            <b>${escapeHtml(from?.label || s.number)}</b> <span class="faint">${escapeHtml(e.relationship_type || "RELATION")}</span> <b>${escapeHtml(to?.label || "Unknown")}</b>
+            ${e.evidence_text ? `<div class="faint" style="margin-top:4px;">${escapeHtml(e.evidence_text).slice(0,220)}</div>` : ""}
+          </div>`;
+        }).join("");
+        panel.innerHTML = `<div class="divider"></div><div style="font-size:13px; font-weight:600; margin-bottom:8px;">Verified relationships</div>${items || `<p class="faint" style="margin:0;">No verified graph relationships are available for this standard.</p>`}`;
+      } catch(err) {
+        panel.innerHTML = `<div class="divider"></div><p class="faint">Couldn't load verified relationships.</p>`;
+      }
+    });
+  }
+
+  function render(){
+    renderPills();
+    const list = STANDARDS;
+    document.getElementById("results-count").textContent = `Showing ${list.length} result${list.length!==1?'s':''}${activeQuery ? ` for "${activeQuery}"` : ""}`;
+    document.getElementById("results-list").innerHTML = list.map(s => `
+      <div class="card card-hover result-card" data-tilt data-number="${s.number}" onclick="selectStandard('${s.number.replace(/'/g,"\\'")}')">
+        <div class="result-top">
+          <span class="result-number">${s.number}</span>
+          <span class="badge ${s.status==='Active'?'active':'superseded'}">${s.status}</span>
+        </div>
+        <p style="font-weight:500; font-size:14px; margin:2px 0 8px;">${s.title}</p>
+        <p class="result-title" style="margin:0 0 10px;">${s.desc || "No description available."}</p>
+        <div class="result-meta"><span>${s.dept || "—"}</span><span>Score ${s.relevance_score ?? "—"}</span><span>${categoryLabel(s.category)}</span></div>
+      </div>
+    `).join("") || `<div class="card" style="padding:30px; text-align:center;">No standards match your search. Try a different keyword.</div>`;
+    initTiltCards();
+    if(!selected || !list.find(s=>s.number===selected.number)) selectStandard(list[0]?.number);
+    else selectStandard(selected.number);
+  }
+
+  async function runSearch(){
+    const input = document.getElementById("std-search");
+    activeQuery = input.value.trim();
+    document.getElementById("results-count").textContent = "Searching BIS knowledge…";
+    try {
+      const results = await MM_DATA.searchStandards(activeQuery, activeCat);
+      STANDARDS = results;
+      selected = null;
+      render();
+    } catch (err) {
+      console.error(err);
+      document.getElementById("results-list").innerHTML = `<div class="card" style="padding:30px; text-align:center;"><p class="muted">Couldn't search BIS knowledge right now.</p><small>${escapeHtml(err.message || "Search failed")}</small></div>`;
+      document.getElementById("results-count").textContent = "";
+    }
+  }
+
+  document.addEventListener("DOMContentLoaded", async () => {
+    renderSidebar("standards.html");
+    const params = new URLSearchParams(location.search);
+    if(params.get("q")) { activeQuery = params.get("q"); document.getElementById("std-search").value = activeQuery; }
+
+    const failed = await MM_DATA.load(["standards"]);
+    if(failed.standards){
+      MM_DATA.showLoadError("results-list", "standards");
+      document.getElementById("results-count").textContent = "";
+      document.getElementById("cat-pills").innerHTML = "";
+      document.getElementById("detail-panel").innerHTML = "";
+      return;
+    }
+
+    // The initial /standards payload remains a useful bounded catalogue view.
+    render();
+
+    const input = document.getElementById("std-search");
+    input.addEventListener("input", () => {
+      clearTimeout(searchTimer);
+      searchTimer = setTimeout(runSearch, 300);
+    });
+    document.getElementById("clear-search").addEventListener("click", () => {
+      activeQuery = "";
+      input.value = "";
+      runSearch();
+    });
+  });
+
+</script>
+</body>
+</html>

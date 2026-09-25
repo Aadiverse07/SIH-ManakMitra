@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BIS Services — ManakMitra</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<header id="site-topnav" class="topnav"></header>
+
+<div class="app-shell">
+  <aside id="site-sidebar" class="sidebar"></aside>
+
+  <main class="main">
+    <div class="page-head">
+      <div class="crumbtrail"><a href="index.html">Home</a> / <span>BIS Services</span></div>
+      <h1>BIS Services</h1>
+      <p class="muted">Certification, registration, hallmarking and more — everything BIS offers, in one place.</p>
+    </div>
+
+    <div class="grid-3" id="services-grid"></div>
+  </main>
+</div>
+
+<div class="modal-backdrop" id="svc-modal">
+  <div class="modal-box">
+    <span class="modal-close" id="svc-modal-close">✕</span>
+    <div id="svc-modal-body"></div>
+  </div>
+</div>
+
+<script src="js/config.js"></script>
+<script src="../api/api.js"></script>
+<script src="js/nav.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="js/textfx.js"></script>
+<script src="js/auth.js"></script>
+<script src="js/app.js"></script>
+<script>
+  document.addEventListener("DOMContentLoaded", async () => {
+    renderSidebar("services.html");
+
+    const failed = await MM_DATA.load(["services"]);
+    if(failed.services){
+      MM_DATA.showLoadError("services-grid", "BIS services");
+      return;
+    }
+
+    document.getElementById("services-grid").innerHTML = SERVICES.map((sv, i) => `
+      <div class="card card-hover feature-tile" data-tilt onclick="openService(${i})" style="cursor:pointer;">
+        <div class="fi"><svg viewBox="0 0 24 24" class="icon"><path d="M12 2 4 5v6c0 5 3.4 9 8 11 4.6-2 8-6 8-11V5l-8-3Z"/></svg></div>
+        <h3>${sv.name}</h3>
+        <p>${sv.summary}</p>
+      </div>
+    `).join("");
+    initTiltCards();
+
+    document.getElementById("svc-modal-close").addEventListener("click", closeService);
+    document.getElementById("svc-modal").addEventListener("click", e => { if(e.target.id === "svc-modal") closeService(); });
+  });
+
+  function openService(i){
+    const sv = SERVICES[i];
+    document.getElementById("svc-modal-body").innerHTML = `
+      <h2 style="font-size:19px; margin:0 0 12px;">${sv.name}</h2>
+      <p style="font-size:14px; color:var(--text-dim); line-height:1.65; margin:0 0 20px;">${sv.detail}</p>
+      <div style="display:flex; gap:10px;">
+        <a href="certification.html" class="btn btn-primary btn-sm">Get Started</a>
+        <a href="assistant.html" class="btn btn-ghost btn-sm">Ask AI</a>
+      </div>
+    `;
+    document.getElementById("svc-modal").classList.add("show");
+  }
+  function closeService(){ document.getElementById("svc-modal").classList.remove("show"); }
+</script>
+</body>
+</html>

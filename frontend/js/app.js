@@ -1,0 +1,327 @@
+
+/* -------------------------------------------------------------------------
+ * Local saved-standards + real browser downloads.
+ * Saved standards are kept per browser so the Saved page reflects the exact
+ * standards the user chose. Downloads are generated as catalogue/reference
+ * PDFs; they are not represented as official BIS standard text.
+ * ------------------------------------------------------------------------- */
+const MM_SAVED_KEY = "mm-saved-standards";
+
+function mmGetSavedStandards(){
+  try {
+    const raw = JSON.parse(localStorage.getItem(MM_SAVED_KEY) || "[]");
+    return Array.isArray(raw) ? raw.map(String) : [];
+  } catch (_) { return []; }
+}
+
+function mmIsStandardSaved(number){
+  return mmGetSavedStandards().includes(String(number));
+}
+
+function mmSaveStandard(standard){
+  if(!standard?.number) return false;
+  const saved = mmGetSavedStandards();
+  const number = String(standard.number);
+  if(!saved.includes(number)) saved.push(number);
+  localStorage.setItem(MM_SAVED_KEY, JSON.stringify(saved));
+  window.dispatchEvent(new CustomEvent("mm:saved-changed", { detail: { number, saved: true } }));
+  if(typeof showToast === "function") showToast(`${number} saved to your library`);
+  return true;
+}
+
+function mmRemoveStandard(number){
+  const next = mmGetSavedStandards().filter(n => n !== String(number));
+  localStorage.setItem(MM_SAVED_KEY, JSON.stringify(next));
+  window.dispatchEvent(new CustomEvent("mm:saved-changed", { detail: { number: String(number), saved: false } }));
+}
+
+function mmToggleStandardSaved(standard){
+  if(!standard?.number) return false;
+  if(mmIsStandardSaved(standard.number)){
+    mmRemoveStandard(standard.number);
+    if(typeof showToast === "function") showToast(`${standard.number} removed from Saved`);
+    return false;
+  }
+  return mmSaveStandard(standard);
+}
+
+function mmPdfSafeText(value){
+  return String(value ?? "")
+    .replace(/[^\x20-\x7E]/g, " ")
+    .replace(/[\\()]/g, "\\$&");
+}
+
+function mmWrapPdfText(value, maxChars = 92){
+  const words = mmPdfSafeText(value).split(/\s+/).filter(Boolean);
+  const lines = [];
+  let line = "";
+  for(const word of words){
+    if(!line) line = word;
+    else if((line + " " + word).length <= maxChars) line += " " + word;
+    else { lines.push(line); line = word; }
+  }
+  if(line) lines.push(line);
+  return lines;
+}
+
+/** Create a small, valid PDF without a third-party runtime dependency. */
+function mmCreateSimplePdf(title, sections = []){
+  const lines = [];
+  lines.push(title, "");
+  sections.forEach(section => {
+    if(section.heading) lines.push(section.heading);
+    mmWrapPdfText(section.text || "").forEach(line => lines.push(line));
+    lines.push("");
+  });
+
+  const objects = [];
+  const add = body => { objects.push(body); return objects.length; };
+  const fontId = add("<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>");
+
+  const contentParts = [];
+  let y = 760;
+  for(const line of lines){
+    const fontSize = line && lines.indexOf(line) === 0 ? 16 : 10.5;
+    const safe = mmPdfSafeText(line);
+    contentParts.push(`BT /F1 ${fontSize} Tf 50 ${y} Td (${safe}) Tj ET`);
+    y -= line ? 16 : 10;
+    if(y < 55){
+      // Keep this intentionally one-page and readable; long sections are
+      // shortened rather than pretending this is a full official document.
+      break;
+    }
+  }
+  const stream = contentParts.join("\n");
+  const streamId = add(`<< /Length ${stream.length} >>\nstream\n${stream}\nendstream`);
+  const pageId = add(`<< /Type /Page /Parent 4 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 ${fontId} 0 R >> >> /Contents ${streamId} 0 R >>`);
+  const pagesId = add(`<< /Type /Pages /Kids [${pageId} 0 R] /Count 1 >>`);
+  const catalogId = add(`<< /Type /Catalog /Pages ${pagesId} 0 R >>`);
+
+  // Fix the parent reference after IDs are known.
+  objects[pageId - 1] = `<< /Type /Page /Parent ${pagesId} 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 ${fontId} 0 R >> >> /Contents ${streamId} 0 R >>`;
+
+  let pdf = "%PDF-1.4\n";
+  const offsets = [0];
+  objects.forEach((obj, i) => {
+    offsets[i + 1] = pdf.length;
+    pdf += `${i + 1} 0 obj\n${obj}\nendobj\n`;
+  });
+  const xref = pdf.length;
+  pdf += `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n`;
+  for(let i=1;i<offsets.length;i++) pdf += String(offsets[i]).padStart(10,"0") + " 00000 n \n";
+  pdf += `trailer\n<< /Size ${objects.length + 1} /Root ${catalogId} 0 R >>\nstartxref\n${xref}\n%%EOF`;
+  return new Blob([pdf], { type: "application/pdf" });
+}
+
+function mmDownloadBlob(blob, filename){
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1500);
+}
+
+function downloadStandardPdf(standard){
+  if(!standard) return;
+  const title = `${standard.number} — ${standard.title}`;
+  const blob = mmCreateSimplePdf(title, [
+    { heading: "Catalogue record", text: "Generated by ManakMitra for reference. This file is a catalogue record, not the official BIS standard text." },
+    { heading: "Description", text: standard.desc || "No description available." },
+    { heading: "Status", text: standard.status || "Not specified" },
+    { heading: "Technical department", text: standard.dept || "Not specified" },
+    { heading: "Category", text: categoryLabelForDownload(standard.category) },
+    { heading: "Language", text: standard.language || "Not specified" },
+    { heading: "Source", text: standard.source_url || "BIS source URL not available in this record." }
+  ]);
+  mmDownloadBlob(blob, `${String(standard.number).replace(/[^A-Za-z0-9._-]+/g,"_")}-record.pdf`);
+  if(typeof showToast === "function") showToast("PDF downloaded");
+}
+
+function categoryLabelForDownload(id){
+  if(id === "all") return "All Categories";
+  if(typeof CATEGORIES !== "undefined"){
+    const c = CATEGORIES.find(c => c.id === id);
+    if(c) return c.label;
+  }
+  return id || "Not specified";
+}
+
+function downloadResourcePdf(kind, title){
+  const descriptions = {
+    application: "Reference checklist for preparing a product-certification application. Confirm the current requirements and forms with BIS before submitting.",
+    fees: "Reference fee-schedule cover sheet for 2026. Confirm current fees directly with BIS because fees and applicable charges can change.",
+    sti: "Reference Scheme of Testing & Inspection template. Use the applicable BIS scheme and current official documents for the authoritative requirements."
+  };
+  const blob = mmCreateSimplePdf(title, [
+    { heading: "ManakMitra reference download", text: descriptions[kind] || "Reference material generated by ManakMitra." },
+    { heading: "Important", text: "This is a convenience reference generated by the application. It is not an official BIS publication." },
+    { heading: "Verification", text: "Check the current official BIS website and the applicable product-specific documents before using this material for compliance or submission." }
+  ]);
+  mmDownloadBlob(blob, `${title.replace(/[^A-Za-z0-9._-]+/g,"_")}.pdf`);
+  if(typeof showToast === "function") showToast("PDF downloaded");
+}
+
+function initGlassSearch(){
+  const wrap = document.getElementById("glass-search");
+  const input = document.getElementById("glass-input");
+  const answer = document.getElementById("glass-answer");
+  const answerBody = document.getElementById("glass-answer-body");
+  const sendBtn = document.getElementById("glass-send-btn");
+  if(!wrap || !input) return;
+
+  let debounceTimer = null;
+  let lastQuery = "";
+
+  function collapse(){
+    wrap.classList.remove("is-expanded");
+  }
+
+  function typeOutAnswer(result){
+    answerBody.innerHTML = `
+      <div class="glass-answer-title">${escapeHtml(result.title)}</div>
+      <div class="typing" id="glass-typing"><span></span><span></span><span></span></div>
+    `;
+    setTimeout(() => {
+      answerBody.innerHTML = `
+        <div class="glass-answer-title">${escapeHtml(result.title)}</div>
+        ${result.html}
+        ${result.chips ? `<div class="chips">${result.chips.map(c => `<span class="chip" data-followup="${escapeHtml(c)}">${escapeHtml(c)}</span>`).join("")}</div>` : ""}
+        ${result.link ? `<a href="${result.link}" class="btn btn-ghost btn-sm" style="margin-top:12px;">Open full view →</a>` : ""}
+      `;
+      answerBody.querySelectorAll("[data-followup]").forEach(el => {
+        el.addEventListener("click", () => {
+          input.value = el.dataset.followup;
+          runQuery(el.dataset.followup);
+        });
+      });
+    }, 520);
+  }
+
+  function runQuery(q){
+    if(!q.trim()) { collapse(); return; }
+    if(window.MM_AUTH && !MM_AUTH.registerQuery()) return;
+    lastQuery = q;
+    wrap.classList.add("is-expanded");
+    answerBody.innerHTML = `<div class="typing" id="glass-typing"><span></span><span></span><span></span></div>`;
+    MM_DATA.chat(q).then(({ reply }) => {
+      answerBody.innerHTML = `
+        <div class="glass-answer-title">ManakMitra AI</div>
+        <p>${escapeHtml(reply).replace(/\n/g, "<br>")}</p>
+      `;
+    }).catch(err => {
+      answerBody.innerHTML = `
+        <div class="glass-answer-title">Couldn't reach ManakMitra AI</div>
+        <p class="muted">${escapeHtml(err.message)}. Please try again.</p>
+      `;
+    });
+  }
+
+  input.addEventListener("focus", () => {
+    if(input.value.trim()) wrap.classList.add("is-expanded");
+  });
+
+  input.addEventListener("input", () => {
+    clearTimeout(debounceTimer);
+    const q = input.value;
+    if(!q.trim()){ collapse(); return; }
+    debounceTimer = setTimeout(() => runQuery(q), 550);
+  });
+
+  input.addEventListener("keydown", (e) => {
+    if(e.key === "Enter"){ e.preventDefault(); clearTimeout(debounceTimer); runQuery(input.value); }
+    if(e.key === "Escape"){ collapse(); input.blur(); }
+  });
+
+  sendBtn?.addEventListener("click", () => runQuery(input.value));
+
+  document.addEventListener("click", (e) => {
+    if(!wrap.contains(e.target) && !input.value.trim()) collapse();
+  });
+
+  document.querySelectorAll(".try-chips .chip").forEach(chip => {
+    chip.addEventListener("click", () => {
+      input.value = chip.textContent;
+      input.focus();
+      runQuery(chip.textContent);
+    });
+  });
+
+  document.getElementById("glass-mic-btn")?.addEventListener("click", function(){
+    this.style.color = "var(--cyan)";
+    input.placeholder = "Listening…";
+    setTimeout(() => { this.style.color = ""; input.placeholder = "Ask me anything about standards or BIS services…"; }, 1600);
+  });
+}
+
+function initTiltCards(){
+  document.querySelectorAll("[data-tilt]").forEach(card => {
+    if(card.dataset.tiltBound) return;
+    card.dataset.tiltBound = "1";
+    card.addEventListener("mousemove", (e) => {
+      const r = card.getBoundingClientRect();
+      // A perspective tilt on a tall card warps its content badly; skip it.
+      if(r.height > 520){ card.style.transform = ""; return; }
+      const x = (e.clientX - r.left) / r.width - 0.5;
+      const y = (e.clientY - r.top) / r.height - 0.5;
+      card.style.transform = `perspective(700px) rotateX(${(-y*6).toFixed(2)}deg) rotateY(${(x*8).toFixed(2)}deg) translateY(-4px)`;
+    });
+    card.addEventListener("mouseleave", () => { card.style.transform = ""; });
+  });
+  initCardShine();
+}
+
+function initCardShine(){
+  document.querySelectorAll(".card").forEach(card => {
+    if(card.querySelector(":scope > .shine")) return; // already enhanced
+    card.insertAdjacentHTML("beforeend", `
+      <div class="shine"></div>
+      <div class="background">
+        <div class="tiles">
+          <div class="tile tile-1"></div><div class="tile tile-2"></div><div class="tile tile-3"></div>
+          <div class="tile tile-4"></div><div class="tile tile-5"></div><div class="tile tile-6"></div>
+          <div class="tile tile-7"></div><div class="tile tile-8"></div><div class="tile tile-9"></div>
+          <div class="tile tile-10"></div>
+        </div>
+        <div class="line line-1"></div>
+        <div class="line line-2"></div>
+        <div class="line line-3"></div>
+      </div>
+    `);
+  });
+}
+
+function initCounters(){
+  document.querySelectorAll("[data-count]").forEach(el => {
+    const target = parseInt(el.dataset.count, 10);
+    let cur = 0;
+    const step = Math.max(1, Math.round(target / 60));
+    const t = setInterval(() => {
+      cur += step;
+      if(cur >= target){ cur = target; clearInterval(t); }
+      el.textContent = cur.toLocaleString("en-IN") + (el.dataset.suffix || "");
+    }, 16);
+  });
+}
+
+document.addEventListener("DOMContentLoaded", () => {
+  initGlassSearch();
+  initTiltCards();
+  initCounters();
+});
+
+/* api/api.js defines window.MM_DATA but not these helpers, and standards.html,
+ * saved.html and resources.html call them as MM_DATA.*. Attach them here. */
+if(window.MM_DATA){
+  Object.assign(window.MM_DATA, {
+    getSavedStandards: mmGetSavedStandards,
+    isStandardSaved: mmIsStandardSaved,
+    saveStandard: mmSaveStandard,
+    removeStandard: mmRemoveStandard,
+    toggleStandardSaved: mmToggleStandardSaved,
+    downloadStandardPdf,
+    downloadResourcePdf,
+  });
+}

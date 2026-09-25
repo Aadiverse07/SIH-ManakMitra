@@ -1,0 +1,382 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BIS Product Certification — ManakMitra</title>
+<link rel="stylesheet" href="css/style.css">
+
+<style>
+.certification-application{max-width:100%;}
+.application-heading{display:flex;justify-content:space-between;gap:18px;align-items:flex-start;margin-bottom:22px}
+.application-status{font-size:11px;font-weight:700;padding:7px 11px;border-radius:999px;background:rgba(82,196,255,.12);color:#3c6a98;white-space:nowrap}
+.application-stepper{display:grid;grid-template-columns:1fr 40px 1fr 40px 1fr 40px 1fr;align-items:center;margin:6px 0 26px}
+.application-step{border:0;background:transparent;display:grid;grid-template-columns:auto 1fr;text-align:left;column-gap:9px;align-items:center;padding:5px;cursor:pointer;color:#5a6687}
+.application-step span{grid-row:1 / span 2;width:31px;height:31px;border-radius:50%;display:grid;place-items:center;background:#eef2fb;font-weight:800;color:#66718f}
+.application-step b{font-size:13px}.application-step small{font-size:10.5px;color:#8993ad}
+.application-step.is-active span,.application-step.is-done span{background:linear-gradient(135deg,#32c7f1,#7d62ff);color:white}
+.application-step.is-active b,.application-step.is-done b{color:#172039}
+.step-line{height:2px;background:#e6e9f3}
+.application-panel{display:none}.application-panel.is-active{display:block}
+.application-panel-head{margin-bottom:18px}.application-panel-head h4{margin:3px 0 4px;font-size:18px}.application-panel-head p{margin:0;color:#78829c;font-size:13px}.eyebrow{font-size:10px;font-weight:800;letter-spacing:.12em;color:#6d74f4}
+.form-grid-2{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px}
+.certification-application textarea,.certification-application select{width:100%;box-sizing:border-box;border:1px solid var(--border);border-radius:12px;background:var(--surface);padding:12px 13px;font:inherit;color:inherit;outline:none}.certification-application textarea:focus,.certification-application select:focus{border-color:#6d74f4;box-shadow:0 0 0 3px rgba(109,116,244,.1)}
+.info-note{margin-top:17px;padding:13px 15px;border-radius:12px;background:rgba(72,191,255,.08);border:1px solid rgba(72,191,255,.18);font-size:12px;line-height:1.55;color:#5e6985}.info-note a{color:#4f62c8}
+.upload-box{border:1px dashed #cfd5e5;border-radius:14px;padding:16px;margin-top:14px;display:grid;grid-template-columns:1fr auto;gap:12px;align-items:center}.upload-box p{font-size:11.5px;margin:5px 0 0}.upload-btn{position:relative;overflow:hidden}.upload-btn input{position:absolute;inset:0;opacity:0;cursor:pointer}.uploaded-documents{grid-column:1/-1;display:flex;flex-wrap:wrap;gap:8px}.doc-chip{font-size:11px;padding:7px 9px;border-radius:9px;background:#f2f4fa;color:#56617d}
+.checklist{display:grid;gap:10px;margin:18px 0}.checklist label,.confirmation-check{display:flex;gap:10px;align-items:flex-start;font-size:13px;color:#4e5a78;line-height:1.4}.checklist input,.confirmation-check input{margin-top:3px;accent-color:#6b70f5}
+.review-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px}.review-item{padding:13px;border:1px solid var(--border);border-radius:12px;background:rgba(255,255,255,.4)}.review-item small{display:block;font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:#8a94ad;margin-bottom:4px}.review-item strong{font-size:13px;color:#26304c;word-break:break-word}
+.final-actions{display:flex;flex-wrap:wrap;gap:10px;margin-top:18px}.final-status{margin-top:12px;font-size:12px;color:#5f6b87;min-height:18px}
+.application-actions{display:flex;gap:10px;margin-top:25px;padding-top:18px;border-top:1px solid var(--border)}.actions-spacer{flex:1}
+@media(max-width:760px){.application-stepper{grid-template-columns:1fr 1fr;gap:10px}.step-line{display:none}.form-grid-2,.review-grid{grid-template-columns:1fr}.upload-box{grid-template-columns:1fr}.application-heading{flex-direction:column}.final-actions .btn{width:100%;text-align:center}}
+</style>
+</head>
+<body>
+
+<header id="site-topnav" class="topnav"></header>
+
+<div class="app-shell">
+  <aside id="site-sidebar" class="sidebar"></aside>
+
+  <main class="main">
+    <div class="page-head">
+      <div class="crumbtrail"><a href="index.html">Home</a> / <a href="services.html">BIS Services</a> / <span>Product Certification</span></div>
+      <h1>BIS Product Certification</h1>
+      <p class="muted">Get your product certified and ensure quality, safety &amp; reliability.</p>
+    </div>
+
+    <div class="card" data-tilt style="padding:0; overflow:hidden; margin-bottom:20px; display:flex; align-items:center; gap:20px; background:var(--grad-soft);">
+      <div style="flex:1; padding:30px;">
+        <h2 style="font-size:19px; margin:0 0 8px;">The ISI mark, explained</h2>
+        <p class="muted" style="font-size:13.8px; line-height:1.6; margin:0;">The ISI mark is India's most recognised product-quality certification, confirming a product conforms to the applicable Indian Standard through independent testing and factory audits.</p>
+      </div>
+      <div style="width:130px;height:130px;border-radius:50%;background:var(--surface);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;flex-shrink:0; margin-right:30px;">
+        <svg viewBox="0 0 24 24" class="icon" style="width:56px;height:56px;color:var(--cyan);"><path d="M12 2 4 5v6c0 5 3.4 9 8 11 4.6-2 8-6 8-11V5l-8-3Z"/><path d="m9 12 2 2 4-4"/></svg>
+      </div>
+    </div>
+
+    <div class="grid-2" style="grid-template-columns: 1.1fr .9fr; align-items:start;">
+      <div class="card" data-tilt style="padding:24px;">
+        <h3 style="margin:0 0 6px; font-size:15.5px;">About the Service</h3>
+        <p class="muted" style="font-size:13.5px; line-height:1.6; margin:0 0 20px;">BIS certification ensures that products meet Indian Standards for quality and reliability. It helps build trust and opens access to wider markets.</p>
+        <h3 style="margin:0 0 10px; font-size:15.5px;">Key Benefits</h3>
+        <div id="benefits-list"></div>
+      </div>
+
+      <div class="card" data-tilt style="padding:24px;">
+        <h3 style="margin:0 0 14px; font-size:15.5px;">Key Benefits</h3>
+        <div id="benefits-list-2"></div>
+      </div>
+    </div>
+
+    <div class="card" data-tilt style="padding:26px; margin-top:18px;">
+      <h3 style="margin:0 0 18px; font-size:15.5px;">How to Apply</h3>
+      <div class="steps-row" id="steps-row"></div>
+    </div>
+
+    <div class="card certification-application" style="padding:26px; margin-top:18px;">
+      <div class="application-heading">
+        <div>
+          <h3 style="margin:0 0 6px; font-size:17px;">Complete your application</h3>
+          <p class="muted" style="font-size:13.3px; margin:0;">Save your progress and work through all four preparation steps. Your draft is stored in your account so you can return to it later.</p>
+        </div>
+        <span class="application-status" id="application-status">New application</span>
+      </div>
+
+      <div class="application-stepper" id="application-stepper">
+        <button type="button" class="application-step is-active" data-step="1"><span>1</span><b>Register</b><small>Applicant</small></button>
+        <div class="step-line"></div>
+        <button type="button" class="application-step" data-step="2"><span>2</span><b>Apply</b><small>Product &amp; docs</small></button>
+        <div class="step-line"></div>
+        <button type="button" class="application-step" data-step="3"><span>3</span><b>Testing</b><small>Readiness</small></button>
+        <div class="step-line"></div>
+        <button type="button" class="application-step" data-step="4"><span>4</span><b>Certification</b><small>Review &amp; submit</small></button>
+      </div>
+
+      <form id="cert-application-form" novalidate>
+        <section class="application-panel is-active" data-panel="1">
+          <div class="application-panel-head">
+            <div><span class="eyebrow">STEP 1</span><h4>Register the applicant</h4><p>Tell us who is applying and where the product is manufactured.</p></div>
+          </div>
+          <div class="form-grid-2">
+            <div><label class="label">Applicant / authorised person *</label><div class="field"><input id="applicant-name" required placeholder="Full name"></div></div>
+            <div><label class="label">Contact phone</label><div class="field"><input id="app-phone" inputmode="tel" placeholder="10-digit mobile number"></div></div>
+          </div>
+          <div><label class="label">Company name *</label><div class="field"><input id="company-name" required placeholder="Registered company / manufacturer name"></div></div>
+          <div><label class="label">Factory / manufacturing address</label><div class="field"><textarea id="factory-address" rows="3" placeholder="Complete manufacturing-premises address"></textarea></div></div>
+          <div class="info-note"><strong>Why this matters:</strong> BIS's product-certification guidance starts with identifying the applicable Indian Standard and documenting manufacturing, process-control, quality-control and testing capability. <a href="https://www.bis.gov.in/apply-for-a-license/?lang=en" target="_blank" rel="noopener">BIS application guidance ↗</a></div>
+        </section>
+
+        <section class="application-panel" data-panel="2">
+          <div class="application-panel-head"><div><span class="eyebrow">STEP 2</span><h4>Build the application</h4><p>Enter the product and standard details, then attach supporting material you already have.</p></div></div>
+          <div class="form-grid-2">
+            <div><label class="label">Product name *</label><div class="field"><input id="product-name" required placeholder="e.g. Portland Cement 43 Grade"></div></div>
+            <div><label class="label">Applicable IS number</label><div class="field"><input id="is-number" placeholder="e.g. IS 8112:2013"></div></div>
+          </div>
+          <div><label class="label">Contact email *</label><div class="field"><input id="contact-email" required type="email" placeholder="you@company.com"></div></div>
+          <div><label class="label">Product / manufacturing description</label><div class="field"><textarea id="product-description" rows="4" placeholder="Briefly describe the product, model/grade, manufacturing process and any important variants."></textarea></div></div>
+          <div class="upload-box">
+            <div><strong>Supporting documents</strong><p class="muted">Upload documents you want to keep with this application. Exact BIS requirements can vary by product and scheme.</p></div>
+            <label class="btn btn-secondary upload-btn"><span>Choose files</span><input id="application-files" type="file" multiple accept=".pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg"></label>
+            <div id="uploaded-documents" class="uploaded-documents"></div>
+          </div>
+        </section>
+
+        <section class="application-panel" data-panel="3">
+          <div class="application-panel-head"><div><span class="eyebrow">STEP 3</span><h4>Prepare for testing</h4><p>Use this checklist to identify gaps before the BIS assessment/testing stage.</p></div></div>
+          <div class="form-grid-2">
+            <div><label class="label">Testing arrangement</label><div class="field"><select id="testing-arrangement"><option value="">Select one</option><option value="in-house">In-house testing</option><option value="recognized-lab">BIS-recognised laboratory</option><option value="both">In-house + laboratory</option><option value="not-sure">Not decided yet</option></select></div></div>
+            <div><label class="label">Sample readiness</label><div class="field"><select id="sample-readiness"><option value="">Select one</option><option value="ready">Samples are ready</option><option value="preparing">Samples are being prepared</option><option value="not-ready">Not ready</option></select></div></div>
+          </div>
+          <div class="checklist" id="testing-checklist">
+            <label><input type="checkbox" data-check="infrastructure"> Manufacturing infrastructure documented</label>
+            <label><input type="checkbox" data-check="quality"> Quality-control / process controls documented</label>
+            <label><input type="checkbox" data-check="equipment"> Required testing equipment and calibration records checked</label>
+            <label><input type="checkbox" data-check="reports"> Existing test reports / records collected</label>
+            <label><input type="checkbox" data-check="inspection"> Factory inspection access and responsible contact identified</label>
+          </div>
+          <div class="info-note"><strong>Official process:</strong> BIS states that assessment includes manufacturing/testing capability and that product conformity can be established through third-party laboratory testing, testing at the manufacturing premises, or a combination, depending on the applicable route. <a href="https://www.bis.gov.in/product-certification/product-certification-process/?lang=en" target="_blank" rel="noopener">BIS Product Certification Process ↗</a></div>
+        </section>
+
+        <section class="application-panel" data-panel="4">
+          <div class="application-panel-head"><div><span class="eyebrow">STEP 4</span><h4>Review &amp; certification hand-off</h4><p>Finish your preparation here, then continue to the official BIS online application portal.</p></div></div>
+          <div id="application-review" class="review-grid"></div>
+          <label class="confirmation-check"><input id="ready-confirmation" type="checkbox"> <span>I have reviewed the information above and understand that this ManakMitra record is a preparation draft, not a BIS licence or official BIS submission.</span></label>
+          <div class="final-actions">
+            <button type="button" class="btn btn-secondary" id="email-application">Email me a copy</button>
+            <button type="button" class="btn btn-secondary" id="download-application">Download summary</button>
+            <a class="btn btn-primary" id="bis-submit-link" href="https://www.manakonline.in/" target="_blank" rel="noopener">Continue to BIS ManakOnline ↗</a>
+          </div>
+          <div id="final-status" class="final-status" aria-live="polite"></div>
+        </section>
+
+        <div class="application-actions">
+          <button type="button" class="btn btn-secondary" id="application-back" hidden>Back</button>
+          <div class="actions-spacer"></div>
+          <button type="button" class="btn btn-primary" id="application-next">Start Your Application</button>
+        </div>
+      </form>
+    </div>
+  </main>
+</div>
+
+<script src="js/config.js"></script>
+<script src="../api/api.js"></script>
+<script src="js/nav.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="js/textfx.js"></script>
+<script src="js/auth.js"></script>
+<script src="js/app.js"></script>
+<script>
+  const BENEFITS = ["Legal compliance", "Market acceptance", "Quality assurance", "Consumer trust", "Export opportunities"];
+  const state = {
+    step: 1, id: null, applicationNumber: null, uploadedDocuments: [],
+    applicantName: "", phone: "", companyName: "", factoryAddress: "",
+    productName: "", isNumber: "", contactEmail: "", productDescription: "",
+    testingArrangement: "", sampleReadiness: "", checks: {}, status: "draft"
+  };
+
+  const $ = id => document.getElementById(id);
+  const val = id => ($(id)?.value || "").trim();
+
+  function collectState(){
+    state.applicantName = val("applicant-name");
+    state.phone = val("app-phone");
+    state.companyName = val("company-name");
+    state.factoryAddress = val("factory-address");
+    state.productName = val("product-name");
+    state.isNumber = val("is-number");
+    state.contactEmail = val("contact-email");
+    state.productDescription = val("product-description");
+    state.testingArrangement = $("testing-arrangement")?.value || "";
+    state.sampleReadiness = $("sample-readiness")?.value || "";
+    document.querySelectorAll("[data-check]").forEach(el => { state.checks[el.dataset.check] = el.checked; });
+  }
+
+  function fillState(){
+    const map = {
+      "applicant-name": state.applicantName, "app-phone": state.phone,
+      "company-name": state.companyName, "factory-address": state.factoryAddress,
+      "product-name": state.productName, "is-number": state.isNumber,
+      "contact-email": state.contactEmail, "product-description": state.productDescription
+    };
+    Object.entries(map).forEach(([id,v]) => { if($(id)) $(id).value = v || ""; });
+    if($("testing-arrangement")) $("testing-arrangement").value = state.testingArrangement || "";
+    if($("sample-readiness")) $("sample-readiness").value = state.sampleReadiness || "";
+    document.querySelectorAll("[data-check]").forEach(el => { el.checked = !!state.checks[el.dataset.check]; });
+    renderDocs(); renderReview();
+  }
+
+  function payload(){
+    collectState();
+    return {
+      current_step: state.step,
+      status: state.status,
+      product_name: state.productName,
+      is_number: state.isNumber,
+      company_name: state.companyName,
+      contact_email: state.contactEmail,
+      applicant_name: state.applicantName,
+      phone: state.phone,
+      factory_address: state.factoryAddress,
+      document_ids: state.uploadedDocuments.map(d => d.id),
+      data: {
+        product_description: state.productDescription,
+        testing_arrangement: state.testingArrangement,
+        sample_readiness: state.sampleReadiness,
+        checks: state.checks,
+        document_names: state.uploadedDocuments.map(d => d.name)
+      }
+    };
+  }
+
+  function setStep(step){
+    state.step = step;
+    document.querySelectorAll(".application-panel").forEach(p => p.classList.toggle("is-active", Number(p.dataset.panel) === step));
+    document.querySelectorAll(".application-step").forEach(b => {
+      const n = Number(b.dataset.step); b.classList.toggle("is-active", n === step); b.classList.toggle("is-done", n < step);
+    });
+    $("application-back").hidden = step === 1;
+    $("application-next").textContent = step === 1 ? "Start Your Application" : (step === 4 ? "Save final draft" : "Save & Continue");
+    if(step === 4) renderReview();
+    window.scrollTo({top: document.querySelector(".certification-application").offsetTop - 30, behavior:"smooth"});
+  }
+
+  function validateStep(step){
+    collectState();
+    if(step === 1){
+      if(!state.applicantName || !state.companyName) { showToast("Enter the applicant name and company name first."); return false; }
+    }
+    if(step === 2){
+      if(!state.productName || !state.contactEmail){ showToast("Enter the product name and contact email first."); return false; }
+      if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(state.contactEmail)){ showToast("Enter a valid contact email."); return false; }
+    }
+    if(step === 4 && !$("ready-confirmation").checked){ showToast("Please confirm that you reviewed the preparation draft."); return false; }
+    return true;
+  }
+
+  async function saveApplication(){
+    const data = payload();
+    if(!state.id){
+      const created = await MM_DATA.createCertificationApplication(data);
+      state.id = created.id; state.applicationNumber = created.application_number;
+      $("application-status").textContent = `Draft ${state.applicationNumber}`;
+    } else {
+      const updated = await MM_DATA.updateCertificationApplication(state.id, data);
+      if(updated?.application_number) state.applicationNumber = updated.application_number;
+    }
+    $("application-status").textContent = `Draft ${state.applicationNumber || "saved"}`;
+    localStorage.setItem("mm-last-certification-application", state.id || "");
+    return true;
+  }
+
+  function renderDocs(){
+    const box = $("uploaded-documents");
+    box.innerHTML = state.uploadedDocuments.length
+      ? state.uploadedDocuments.map(d => `<span class="doc-chip">${escapeHtml(d.name)}</span>`).join("")
+      : `<span class="muted" style="font-size:11px;">No supporting documents uploaded yet.</span>`;
+  }
+  function escapeHtml(s){ const d=document.createElement("div"); d.textContent=s||""; return d.innerHTML; }
+
+  function renderReview(){
+    collectState();
+    const checks = Object.values(state.checks).filter(Boolean).length;
+    const total = Object.keys(state.checks).length || 5;
+    $("application-review").innerHTML = [
+      ["Application number", state.applicationNumber || "Created when you save"],
+      ["Applicant", state.applicantName || "—"], ["Company", state.companyName || "—"],
+      ["Product", state.productName || "—"], ["Indian Standard", state.isNumber || "Not specified"],
+      ["Contact email", state.contactEmail || "—"], ["Testing readiness", `${checks}/${total} checklist items checked`],
+      ["Documents", `${state.uploadedDocuments.length} attached`]
+    ].map(([k,v]) => `<div class="review-item"><small>${k}</small><strong>${escapeHtml(v)}</strong></div>`).join("");
+  }
+
+  async function uploadFiles(files){
+    if(!files.length) return;
+    if(!MM_AUTH?.isLoggedIn?.()){ showToast("Please sign in before uploading documents."); return; }
+    for(const file of files){
+      try{
+        const doc = await MM_DATA.uploadDocument(file);
+        state.uploadedDocuments.push({id: doc.id, name: doc.original_filename || file.name});
+        renderDocs();
+      }catch(err){ showToast(`Couldn't upload ${file.name}: ${err.message}`); }
+    }
+    try{ await saveApplication(); }catch(err){ console.warn(err); }
+  }
+
+  function downloadSummary(){
+    collectState();
+    const summary = {
+      application_number: state.applicationNumber,
+      status: state.status,
+      applicant: {name: state.applicantName, company: state.companyName, phone: state.phone, email: state.contactEmail, factory_address: state.factoryAddress},
+      product: {name: state.productName, indian_standard: state.isNumber, description: state.productDescription},
+      testing: {arrangement: state.testingArrangement, sample_readiness: state.sampleReadiness, checklist: state.checks},
+      supporting_documents: state.uploadedDocuments.map(d => d.name),
+      note: "Preparation record only; not an official BIS submission or licence."
+    };
+    const blob = new Blob([JSON.stringify(summary,null,2)], {type:"application/json"});
+    const a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download=`${state.applicationNumber || "manakmitra-bis-application"}.json`; a.click(); URL.revokeObjectURL(a.href);
+  }
+
+  async function emailCopy(){
+    if(!state.id){ try{ await saveApplication(); }catch(err){ showToast(err.message); return; } }
+    try{
+      const result = await MM_DATA.emailCertificationApplication(state.id);
+      $("final-status").textContent = result.sent ? "✓ Email sent successfully." : `Email not sent: ${result.message}`;
+    }catch(err){ $("final-status").textContent = `Email could not be sent: ${err.message}`; }
+  }
+
+  async function initApplications(){
+    const failed = await MM_DATA.load(["cert_steps"]);
+    if(failed.cert_steps) MM_DATA.showLoadError("steps-row", "certification steps");
+    else $("steps-row").innerHTML = CERT_STEPS.map(s => `<div class="card step-card" data-tilt><div class="step-num">${s.step}</div><h4>${s.title}</h4><p>${s.detail}</p></div>`).join("");
+    initTiltCards();
+    $("benefits-list").innerHTML = BENEFITS.map(b => `<div class="row-card" style="padding:9px 4px;"><div class="row-left"><span class="row-dot" style="background:var(--green);"></span><span class="row-title">${b}</span></div></div>`).join("");
+    $("benefits-list-2").innerHTML = BENEFITS.map(b => `<div class="row-card" style="padding:9px 4px;"><div class="row-left"><span class="row-dot" style="background:var(--green);"></span><span class="row-title">${b}</span></div></div>`).join("");
+
+    if(MM_AUTH?.isLoggedIn?.()){
+      try{
+        const apps = await MM_DATA.listCertificationApplications();
+        if(apps?.length){
+          const latest = apps[0];
+          state.id=latest.id; state.applicationNumber=latest.application_number; state.status=latest.status || "draft";
+          state.step=Math.min(4, latest.current_step || 1);
+          Object.assign(state, {
+            applicantName:latest.applicant_name||"", phone:latest.phone||"", companyName:latest.company_name||"", factoryAddress:latest.factory_address||"",
+            productName:latest.product_name||"", isNumber:latest.is_number||"", contactEmail:latest.contact_email||""
+          });
+          const d=latest.data||{}; state.productDescription=d.product_description||""; state.testingArrangement=d.testing_arrangement||""; state.sampleReadiness=d.sample_readiness||""; state.checks=d.checks||{};
+          state.uploadedDocuments=(d.document_names||[]).map((name,i)=>({id:(latest.document_ids||[])[i],name})).filter(d=>d.name);
+          fillState(); setStep(state.step); $("application-status").textContent=`Draft ${state.applicationNumber}`;
+        }
+      }catch(err){ console.warn("Certification applications unavailable",err); }
+    }
+    renderDocs(); renderReview();
+  }
+
+  document.addEventListener("DOMContentLoaded", async () => {
+    renderSidebar("services.html");
+    await initApplications();
+
+    document.querySelectorAll(".application-step").forEach(btn => btn.addEventListener("click", async () => {
+      const target=Number(btn.dataset.step); if(target===state.step) return;
+      if(target < state.step){ setStep(target); return; }
+      if(!validateStep(state.step)) return;
+      try{ await saveApplication(); setStep(target); }catch(err){ showToast(err.message); }
+    }));
+    $("application-next").addEventListener("click", async () => {
+      if(!validateStep(state.step)) return;
+      try{
+        await saveApplication();
+        if(state.step < 4) setStep(state.step+1);
+        else { state.status="ready_for_submission"; await saveApplication(); $("final-status").textContent=`✓ Application ${state.applicationNumber} is saved and ready for your official BIS hand-off.`; $("application-status").textContent="Ready for BIS hand-off"; }
+      }catch(err){ showToast(err.message); }
+    });
+    $("application-back").addEventListener("click", () => setStep(Math.max(1,state.step-1)));
+    $("application-files").addEventListener("change", e => uploadFiles([...e.target.files]));
+    $("email-application").addEventListener("click", emailCopy);
+    $("download-application").addEventListener("click", downloadSummary);
+  });
+</script>
+</body>
+</html>
