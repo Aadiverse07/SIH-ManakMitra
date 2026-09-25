@@ -4,8 +4,8 @@ const MM_FREE_QUERY_LIMIT = 3;
 // SECURITY: this must be the Supabase anon/public key only. Never hardcode a
 // service_role key here — it would give every visitor full, RLS-bypassing
 // admin access to the database. See js/config.js for where these are set.
-const MM_SUPABASE_URL = window.MM_SUPABASE_URL || "";
-const MM_SUPABASE_ANON_KEY = window.MM_SUPABASE_ANON_KEY || "";
+const MM_SUPABASE_URL = window.MM_SUPABASE_URL || "https://swzbglmhifrtbwswpzxs.supabase.co";
+const MM_SUPABASE_ANON_KEY = window.MM_SUPABASE_ANON_KEY || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InN3emJnbG1oaWZydGJ3c3dwenhzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODg3MTMwNTQsImV4cCI6MjEwNDI4OTA1NH0.p3q2YwiBmd3YRvZ-12SoXIFTqKqkjzxFHdCQQV6Hmd4";
 let MM_AUTH_CONFIGURED = !!(MM_SUPABASE_URL && MM_SUPABASE_ANON_KEY && window.supabase);
 
 let sb = null;
